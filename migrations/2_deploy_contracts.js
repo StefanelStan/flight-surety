@@ -24,6 +24,6 @@ module.exports = function(deployer) {
 */
 
 module.exports = async (deployer) => {
-    await deployer.deploy(FlightSuretyData);
+    await deployer.deploy(FlightSuretyData, 'Lufthansa');
     await deployer.deploy(FlightSuretyApp);
 }
