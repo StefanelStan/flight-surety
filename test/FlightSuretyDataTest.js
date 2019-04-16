@@ -11,11 +11,11 @@ contract('FlightSuretyData', accounts => {
     
     describe ('Test suite: isContractOperational', () => {
         before(async() => {
-            contractInstance = await contractDefinition.new(firstAirline, {from:owner});
+            contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
         });
 
         it('should NOT allow unauthorized users to query isContractOperational', async() => {
-            expectToRevert(contractInstance.isContractOperational.call({from: appContractAddress}), 'Caller is not authorized');
+            await expectToRevert(contractInstance.isContractOperational.call({from: appContractAddress}), 'Caller is not authorized');
         })
 
         it('should make the contract operational after deployment and allow the owner to query isContractOperational', async() => {
@@ -26,15 +26,15 @@ contract('FlightSuretyData', accounts => {
 
     describe('Test suite: setOperatingStatus', () => {
         before(async() => {
-            contractInstance = await contractDefinition.new(firstAirline, {from:owner});
+            contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
         });
 
         it('should NOT allow unauthorized users to setOperatingStatus', async() => {
-            expectToRevert(contractInstance.setOperatingStatus(false, {from: appContractAddress}), 'Caller is not authorized');
+            await expectToRevert(contractInstance.setOperatingStatus(false, {from: appContractAddress}), 'Caller is not authorized');
         });
 
         it('should NOT allow to setOperatingStatus the SAME operating status', async() => {
-            expectToRevert(contractInstance.setOperatingStatus(true, {from: owner}), 'Contract is already in this state');
+            await expectToRevert(contractInstance.setOperatingStatus(true, {from: owner}), 'Contract is already in this state');
         });
 
         it('should allow the owner to setOperatingStatus', async() => {
@@ -48,24 +48,84 @@ contract('FlightSuretyData', accounts => {
     
     describe('Test suite: getAirline', () => {
         before(async() => {
-            contractInstance = await contractDefinition.new(firstAirline, {from:owner});
+            contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
         });
 
         it('should NOT allow unauthorized user to getAirline', async() => {
-            expectToRevert(contractInstance.getAirline.call(owner, {from: appContractAddress}), 'Caller is not authorized');
-            expectToRevert(contractInstance.getAirline.call(owner, {from: owner}), 'Caller is not authorized');
+            await expectToRevert(contractInstance.getAirline.call(owner, {from: appContractAddress}), 'Caller is not authorized');
+            await expectToRevert(contractInstance.getAirline.call(owner, {from: owner}), 'Caller is not authorized');
         });
     });
 
     describe('Testing suite: authorizeContract', () => { //continue on 15/04/2019 @ 21:27
-        it('should NOT allow unauthorized users to authorizeContract', async()=>{});
-        it('should allow unauthorized users to authorizeContract', async()=>{});
-        it('should deploy the first airline and allow ONLY authorizedContracts to query for it', async() => {});
-        it('should allow authorizedContracts to pause the contract', async() => {});
+        before(async() => {
+            contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+        });
+
+        it('should NOT allow unauthorized users to authorizeContract', async() => {
+            await expectToRevert(contractInstance.authorizeContract(owner, {from: appContractAddress}), 'Caller is not contract owner');
+        });
+
+        it('should allow ONLY owner to authorizeContract', async() => {
+            await contractInstance.authorizeContract(appContractAddress, {from: owner});
+        });
+
+        it('should deploy the first airline and allow ONLY authorizedContracts to query for it', async() => {
+            let airline = await contractInstance.getAirline.call(owner, {from: appContractAddress});
+            expect(web3.utils.hexToUtf8(airline[0])).to.equal(firstAirline);
+            expect(airline[1]).to.be.true;
+            expect(airline[2]).to.be.true;
+        });
+
+        it('should allow authorizedContracts to pause the contract', async() => {
+            let isOperational = await contractInstance.isContractOperational.call({from: appContractAddress});
+            expect(isOperational).to.be.true;
+            await contractInstance.setOperatingStatus(false, {from: appContractAddress});
+            isOperational = await contractInstance.isContractOperational.call({from: appContractAddress});
+            expect(isOperational).to.be.false;
+        });
+    });
+
+    describe('Test suite: registerAirline', () => {
+        before(async() => {
+            contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            await contractInstance.authorizeContract(appContractAddress, {from: owner});
+        });
+        
+        it('should NOT allow unauthorized user/address to registerAirline', async () => {
+            await expectToRevert(contractInstance.registerAirline(accounts[1], web3.utils.utf8ToHex('Air Pacific'), {from: owner}), 'Caller is not authorized');
+        });
+
+        
+        it('should allow authorized address to registerAirline and set register true and validated not', async () => {
+            await contractInstance.registerAirline(accounts[1], web3.utils.utf8ToHex('Air Pacific'), {from: appContractAddress});
+            let airline = await contractInstance.getAirline.call(accounts[1], {from: appContractAddress});
+            expect(web3.utils.hexToUtf8(airline[0])).to.equal('Air Pacific');
+            expect(airline[1]).to.be.true;
+            expect(airline[2]).to.be.false;
+        });
+        
+        it('should NOT allow authorized address to registerAirline if contract is paused', async () => {
+            await contractInstance.setOperatingStatus(false, {from: appContractAddress});
+            await expectToRevert(contractInstance.registerAirline(accounts[2], web3.utils.utf8ToHex('WizzAir'), {from: appContractAddress}),' Contract is currently not operational');
+        });
+
     });
      
 });
 
-const expectToRevert = async(promise, errorMessage) => {
-    return await truffleAssert.reverts(promise, errorMessage);
+const expectToRevert = (promise, errorMessage) => {
+    return truffleAssert.reverts(promise, errorMessage);
+}
+
+var expectToFail = async(promise, errorType, errorMessage) => {
+    try {
+        await promise;
+    }
+    catch(error){
+        expect(error).to.be.an(errorType);
+        expect(error.message).to.have.string(errorMessage);
+        return;
+    }
+    assert.fail(`Expected to throw an ${errorType} with message ${errorMessage}`);
 }

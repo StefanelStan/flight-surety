@@ -22,20 +22,11 @@ contract FlightSuretyApp {
 
     address private contractOwner;          // Account used to deploy contract
 
-    struct Flight {
-        bool isRegistered;
-        uint8 statusCode;
-        uint256 updatedTimestamp;        
-        address airline;
-    }
-
-    mapping(bytes32 => Flight) private flights;
-
-     /**
-    * @dev Modifier that requires the "operational" boolean variable to be "true"
-    * This is used on all state changing functions to pause the contract in 
-    * the event there is an issue that needs to be fixed
-    */
+    /**
+     * @dev Modifier that requires the "operational" boolean variable to be "true"
+     * This is used on all state changing functions to pause the contract in 
+     * the event there is an issue that needs to be fixed
+     */
     modifier requireIsOperational() {
          // Modify to call data contract's status
         require(true, "Contract is currently not operational");  
@@ -43,16 +34,16 @@ contract FlightSuretyApp {
     }
 
     /**
-    * @dev Modifier that requires the "ContractOwner" account to be the function caller
-    */
+     * @dev Modifier that requires the "ContractOwner" account to be the function caller
+     */
     modifier requireContractOwner(){
         require(msg.sender == contractOwner, "Caller is not contract owner");
         _;
     }
 
     /**
-    * @dev Contract constructor
-    */
+     * @dev Contract constructor
+     */
     constructor() public {
         contractOwner = msg.sender;
     }
@@ -62,24 +53,24 @@ contract FlightSuretyApp {
     }
 
  
-   /**
-    * @dev Add an airline to the registration queue
-    */   
+    /**
+     * @dev Add an airline to the registration queue
+     */   
     function registerAirline() external pure returns(bool success, uint256 votes)
     {
         return (success, 0);
     }
 
-   /**
-    * @dev Register a future flight for insuring.
-    */  
+    /**
+     * @dev Register a future flight for insuring.
+     */  
     function registerFlight() external pure {
 
     }
     
-   /**
-    * @dev Called after oracle has updated flight status
-    */  
+    /**
+     * @dev Called after oracle has updated flight status
+     */  
     function processFlightStatus(
         address airline, 
         string memory flight, 
