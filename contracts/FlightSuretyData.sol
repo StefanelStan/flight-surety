@@ -18,12 +18,24 @@ contract FlightSuretyData {
         uint8 statusCode;
     }
 
-    mapping(bytes32 => Flight) private flights; //flights
-    bytes32[] private flightKeys; //array of keys for the registered flights
-    address private contractOwner;    // Account used to deploy contract
+    struct Insurance {
+        address client;
+        uint256 value;
+        bool paid;
+    }
+
     bool private operational = true;  // Blocks all state changes throughout the contract if false
+    address private contractOwner;    // Account used to deploy contract
+    
     mapping (address => bool) authorizedContracts; //authorized contracts to call the data contract
     mapping (address => Airline) airlines; //airlines
+    mapping (address => uint256) airlineBalances; //balance for each airline.
+
+    bytes32[] private flightKeys; //array of keys for the registered flights
+    mapping (bytes32 => Flight) private flights; //flightsKeys to Flight
+    mapping (bytes32 => bytes32[]) private flightInsurances; //flightKeys to InsurancesKeys;
+    mapping (bytes32 => Insurance) private insurances; //insuranceKey to InsuranceDetails
+    mapping (address => uint256) private insureeBalances; //balance for each insuree
 
     /**
      * @dev Modifier that requires the "operational" boolean variable to be "true"
@@ -62,7 +74,7 @@ contract FlightSuretyData {
      */
     constructor(bytes32 name) public {
         contractOwner = msg.sender;
-        airlines[msg.sender] = Airline(name, true, true);
+        airlines[msg.sender] = Airline(name, true, false);
     }
 
     /**
@@ -103,38 +115,59 @@ contract FlightSuretyData {
         isAuthorized
         isOperational
     {
-        bytes32 key = getFlightKey(airline, number, time);
+        bytes32 key = generateKey(airline, number, time);
         flights[key] = Flight(airline, number, time, status);
         flightKeys.push(key);
     }
 
-    function getAllFlights() external view isAuthorized isOperational returns(bytes32[] memory){
-        bytes32[] memory flightnrs = new bytes32[](flightKeys.length);
-        for (uint i = 0; i < flightKeys.length; i++){
-            flightnrs[i] = flights[flightKeys[i]].flightNumber;
-        }
-        return flightnrs;
+    /**
+     * @dev Client buys (and sends ether) for insurance for a flight
+     */   
+    function buyInsurance(bytes32 flightKey, address _insuree) 
+        external 
+        payable 
+        isAuthorized 
+        isOperational
+    {
+        uint256 amount = msg.value;
+        bytes32 insuranceKey = generateKey(_insuree, flightKey, amount);
+        insurances[insuranceKey] = Insurance(_insuree, amount, false);
+        flightInsurances[flightKey].push(insuranceKey);
+        airlineBalances[flights[flightKey].airline] = airlineBalances[flights[flightKey].airline].add(amount);
     }
 
-    function getFlightDetails(bytes32 _flightNumber) 
-        external 
-        view 
-        isAuthorized
-        isOperational 
-        returns (
-            address,
-            bytes32,
-            uint256,
-            uint8
-        )
-    {
-        for (uint8 i = 0; i < flightKeys.length; i++){
-            if(flights[flightKeys[i]].flightNumber == _flightNumber){
-                Flight storage flight = flights[flightKeys[i]];
-                return (flight.airline, flight.flightNumber, flight.timestamp, flight.statusCode);
+    /**
+     * @dev credits all ensurees for the given flight (flight key) using the delta percentage   
+     * This method should be mostly in AppContract but calling this from AppContract 
+     * X times for X insurees would cause mtoo any calls on the stack which might result in block fail.   
+     */
+    function creditInsurees(bytes32 flightKey, uint8 delta) external isAuthorized isOperational {
+        address airlineAddress = flights[flightKey].airline;
+        for (uint i=0; i < flightInsurances[flightKey].length; i++) {
+            Insurance storage insurance = insurances[flightInsurances[flightKey][i]];
+            if (insurance.paid == false) {
+                uint256 amount = insurance.value.div(10).mul(delta);
+                creditInsuree(insurance, amount);
+                airlineBalances[airlineAddress] = airlineBalances[airlineAddress].sub(amount).sub(insurance.value);
             }
         }
-        revert("Flight Number does not exist");
+    }
+
+    /**
+     *  @dev Credits payouts to insurees
+     */
+    function creditInsuree(Insurance storage insurance, uint256 amount) private isAuthorized isOperational {
+        insureeBalances[insurance.client] = insureeBalances[insurance.client].add(amount).add(insurance.value);
+        insurance.paid = true;
+    }
+
+    /**
+     * @dev Initial funding for the insurance. Unless there are too many delayed flights
+     * resulting in insurance payouts, the contract should be self-sustaining.
+     * This is the method freshly joined airlines would call to pay their fee after they have been vetted in
+     */   
+    function fundAirline(address airline) external payable isAuthorized isOperational {
+        airlineBalances[airline] = airlineBalances[airline].add(msg.value);
     }
 
     function getAirline(address _address) 
@@ -148,40 +181,109 @@ contract FlightSuretyData {
         return (airline.name, airline.isRegistered, airline.isVerified);
     }
 
-    /**
-     * @dev Buy insurance for a flight
-     */   
-    function buy() external payable isAuthorized isOperational {
 
+    function getFlightDetails(bytes32 _flightNumber) 
+        external 
+        view 
+        isAuthorized
+        isOperational 
+        returns (
+            address,
+            bytes32,
+            uint256,
+            uint8,
+            bytes32
+        )
+    {
+        for (uint8 i = 0; i < flightKeys.length; i++){
+            if(flights[flightKeys[i]].flightNumber == _flightNumber){
+                Flight storage flight = flights[flightKeys[i]];
+                return (flight.airline, flight.flightNumber, 
+                        flight.timestamp, flight.statusCode, flightKeys[i]
+                );
+            }
+        }
+        revert("Flight Number does not exist");
     }
 
-    /**
-     *  @dev Credits payouts to insurees
-     */
-    function creditInsurees() external view isAuthorized isOperational {
-    
+    function getAllFlights() external view isAuthorized isOperational returns(bytes32[] memory){
+        bytes32[] memory flightnrs = new bytes32[](flightKeys.length);
+        for (uint i = 0; i < flightKeys.length; i++){
+            flightnrs[i] = flights[flightKeys[i]].flightNumber;
+        }
+        return flightnrs;
+    }
+
+    function getBalanceOfAirline(address _airline) 
+        external 
+        view 
+        isAuthorized 
+        isOperational 
+        returns(uint256) 
+    {
+        return airlineBalances[_airline];
+    }
+
+    function getBalanceOfInsuree(address _insuree) 
+        external 
+        view 
+        isAuthorized 
+        isOperational 
+        returns(uint256)
+    {
+        return insureeBalances[_insuree];
+    }
+
+    function getInsuraceKeysForFlight(bytes32 flightKey) 
+        external 
+        view
+        isAuthorized
+        isOperational
+        returns(bytes32[] memory)
+    {
+        return flightInsurances[flightKey];
+    }
+
+    function getInsuranceDetails(bytes32 insuranceKey)
+        external 
+        view
+        isAuthorized
+        isOperational
+        returns(address, uint256, bool)
+    {
+        Insurance storage insurance = insurances[insuranceKey];
+        return (insurance.client, insurance.value, insurance.paid);
     }
 
     /**
      *  @dev Transfers eligible payout funds to insuree
      */
-    function pay() external view isAuthorized isOperational {
+    function pay(address _insuree, uint256 amount) external isAuthorized isOperational {
+        require(address(this).balance >= amount, "There are no enough funds available on the contract to pay the insuree");
+        require(insureeBalances[_insuree] >= amount, 'The desired amount exceedes insuree balance');
+        address payable payableInsuree = address(uint160(_insuree));
+        uint256 availableBalance = insureeBalances[_insuree];
+        uint256 newBalance = availableBalance.sub(amount);
+        insureeBalances[_insuree] = newBalance;
+        payableInsuree.transfer(amount);
     }
 
-    /**
-     * @dev Initial funding for the insurance. Unless there are too many delayed flights
-     * resulting in insurance payouts, the contract should be self-sustaining.
-     * This is the method freshly joined airlines would call to pay their fee after they have been vetted in
-     */   
-    function fund() public payable isAuthorized isOperational {
-    
-    }
-       
-    /**
-     * @dev Fallback function for funding smart contract.
-     */
-    function() external payable isOperational isAuthorized {
-        fund();
+    function getEstimativeCreditingCost(bytes32 flightKey) 
+        external
+        view
+        isAuthorized
+        isOperational
+        returns(uint256)
+    {
+        uint256 totalCredit = 0;
+        for (uint i=0; i < flightInsurances[flightKey].length; i++) {
+            Insurance storage insurance = insurances[flightInsurances[flightKey][i]];
+            if (insurance.paid == false) {
+                totalCredit = totalCredit.add(insurance.value);
+            }
+        }
+        
+        return totalCredit;
     }
 
     /**
@@ -192,13 +294,13 @@ contract FlightSuretyData {
         return operational;
     }
 
-    function getFlightKey (address airline, bytes32 flight, uint256 timestamp)
-        view
+    function generateKey (address _address, bytes32 key, uint256 value)
         internal
+        view
         isOperational
         returns(bytes32) 
     {
-        return keccak256(abi.encodePacked(airline, flight, timestamp));
+        return keccak256(abi.encodePacked(_address, key, value));
     }
 }
 
