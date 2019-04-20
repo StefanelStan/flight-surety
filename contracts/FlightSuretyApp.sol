@@ -6,9 +6,6 @@ pragma solidity >0.4.25;
 
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
 
-/************************************************** */
-/* FlightSurety Smart Contract                      */
-/************************************************** */
 contract FlightSuretyApp {
     using SafeMath for uint256;
 
@@ -21,22 +18,24 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
     address private contractOwner;          // Account used to deploy contract
+    bool private operational = true; 
+    FlightSuretyData data; //data contract
 
     /**
      * @dev Modifier that requires the "operational" boolean variable to be "true"
      * This is used on all state changing functions to pause the contract in 
      * the event there is an issue that needs to be fixed
      */
-    modifier requireIsOperational() {
+    modifier isOperational() {
          // Modify to call data contract's status
-        require(true, "Contract is currently not operational");  
+        require(operational == true, "Contract is currently not operational");  
         _;  // All modifiers require an "_" which indicates where the function body will be added
     }
 
     /**
      * @dev Modifier that requires the "ContractOwner" account to be the function caller
      */
-    modifier requireContractOwner(){
+    modifier onlyOwner(){
         require(msg.sender == contractOwner, "Caller is not contract owner");
         _;
     }
@@ -44,14 +43,19 @@ contract FlightSuretyApp {
     /**
      * @dev Contract constructor
      */
-    constructor() public {
+    constructor(address _dataContractAddress) public {
         contractOwner = msg.sender;
+        data = FlightSuretyData(_dataContractAddress);
     }
 
-    function isOperational() public pure returns(bool) {
-        return true;  // Modify to call data contract's status
+    function setOperatingStatus(bool mode) external onlyOwner {
+        require(mode != operational, "Contract is already in this state");
+        operational = mode;
     }
-
+    
+    function isContractOperational() public view returns(bool) {
+        return operational; 
+    }
  
     /**
      * @dev Add an airline to the registration queue
@@ -85,9 +89,7 @@ contract FlightSuretyApp {
 
 
     // Generate a request for oracles to fetch flight information
-    function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) 
-        external 
-    {
+    function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) external {
         uint8 index = getRandomIndex(msg.sender);
 
         // Generate a unique key for storing the request
@@ -237,3 +239,7 @@ contract FlightSuretyApp {
         return random;
     }
 }   
+
+contract FlightSuretyData {
+
+}

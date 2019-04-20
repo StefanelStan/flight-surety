@@ -1,4 +1,4 @@
-const expect = require('chai').expect;
+/*const expect = require('chai').expect;
 const truffleAssert = require('truffle-assertions');
 
 const contractDefinition = artifacts.require('FlightSuretyData');
@@ -93,7 +93,7 @@ contract('FlightSuretyData', accounts => {
         });
     });
 
-    describe('Test suite: registerAirline', () => {
+    describe('Test suite: registerAirline and getNumberOfAirlines', () => {
         before(async() => {
             contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
             await contractInstance.authorizeContract(appContractAddress, {from: owner});
@@ -104,7 +104,14 @@ contract('FlightSuretyData', accounts => {
         });
         
         it('should allow authorizedContract to registerAirline and set register true and validated not', async () => {
+            let numberOfAirlines = await contractInstance.getNumberOfAirlines.call({from: appContractAddress});
+            expect(Number(numberOfAirlines)).to.equal(1);
+            
             await contractInstance.registerAirline(accounts[1], web3.utils.utf8ToHex('Air Pacific'), {from: appContractAddress});
+            
+            numberOfAirlines = await contractInstance.getNumberOfAirlines.call({from: appContractAddress});
+            expect(Number(numberOfAirlines)).to.equal(2);
+
             let airline = await contractInstance.getAirline.call(accounts[1], {from: appContractAddress});
             expect(web3.utils.hexToUtf8(airline[0])).to.equal('Air Pacific');
             expect(airline[1]).to.be.true;
@@ -536,3 +543,4 @@ var expectToFail = async(promise, errorType, errorMessage) => {
     }
     assert.fail(`Expected to throw an ${errorType} with message ${errorMessage}`);
 }
+*/

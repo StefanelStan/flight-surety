@@ -25,5 +25,5 @@ module.exports = function(deployer) {
 
 module.exports = async (deployer) => {
     await deployer.deploy(FlightSuretyData, web3.utils.utf8ToHex('Lufthansa'));
-    await deployer.deploy(FlightSuretyApp);
+    await deployer.deploy(FlightSuretyApp, FlightSuretyData.address);
 }

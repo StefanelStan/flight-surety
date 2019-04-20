@@ -26,7 +26,8 @@ contract FlightSuretyData {
 
     bool private operational = true;  // Blocks all state changes throughout the contract if false
     address private contractOwner;    // Account used to deploy contract
-    
+    uint256 private numberOfAirlines; //counter to keep how many registered airlines are there
+
     mapping (address => bool) authorizedContracts; //authorized contracts to call the data contract
     mapping (address => Airline) airlines; //airlines
     mapping (address => uint256) airlineBalances; //balance for each airline.
@@ -75,6 +76,7 @@ contract FlightSuretyData {
     constructor(bytes32 name) public {
         contractOwner = msg.sender;
         airlines[msg.sender] = Airline(name, true, false);
+        numberOfAirlines = numberOfAirlines.add(1);
     }
 
     /**
@@ -104,6 +106,7 @@ contract FlightSuretyData {
         isOperational
     {
         airlines[_address] = Airline(name, true, false);
+        numberOfAirlines = numberOfAirlines.add(1);
     }
     
     function validateAirline(address _address) external isAuthorized isOperational {
@@ -181,6 +184,9 @@ contract FlightSuretyData {
         return (airline.name, airline.isRegistered, airline.isVerified);
     }
 
+    function getNumberOfAirlines() external view isAuthorized isOperational returns(uint256) {
+        return numberOfAirlines;
+    }
 
     function getFlightDetails(bytes32 _flightNumber) 
         external 
