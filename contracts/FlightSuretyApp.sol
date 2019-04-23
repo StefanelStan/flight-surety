@@ -17,10 +17,17 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
+    uint256 private FEE =  10 ether;
+
     address private contractOwner;          // Account used to deploy contract
     bool private operational = true; 
     FlightSuretyData data; //data contract
 
+    mapping(address => uint256) airlineVotes;    
+
+    event AirlineRegistered(address indexed airline, uint256 votes);
+
+    event AirlineFunded(address indexed airline, uint256 value);
     /**
      * @dev Modifier that requires the "operational" boolean variable to be "true"
      * This is used on all state changing functions to pause the contract in 
@@ -37,6 +44,25 @@ contract FlightSuretyApp {
      */
     modifier onlyOwner(){
         require(msg.sender == contractOwner, "Caller is not contract owner");
+        _;
+    }
+
+    modifier airlineRegistered {
+        bool isRegistered;
+        (,isRegistered,) = data.getAirline(msg.sender);
+        require(isRegistered == true, 'Caller is not a registered airline');
+        _;
+    }
+
+    modifier airlineValidated {
+        bool isValidated;
+        (,,isValidated) = data.getAirline(msg.sender);
+        require(isValidated == true, 'Caller is not a validated airline');
+        _;
+    }
+
+    modifier minimumFee(uint256 fee){
+        require(msg.value >= fee, 'Minimum fee required for funding');
         _;
     }
 
@@ -60,9 +86,12 @@ contract FlightSuretyApp {
     /**
      * @dev Add an airline to the registration queue
      */   
-    function registerAirline() external pure returns(bool success, uint256 votes)
-    {
-        return (success, 0);
+    function registerAirline() external { 
+        emit AirlineRegistered(msg.sender, airlineVotes[msg.sender]);
+    }
+
+    function fundAirline() external payable isOperational airlineRegistered minimumFee(FEE) {
+        emit AirlineFunded(msg.sender, msg.value);
     }
 
     /**
@@ -241,5 +270,5 @@ contract FlightSuretyApp {
 }   
 
 contract FlightSuretyData {
-
+    function getAirline(address _address) external view returns(bytes32, bool, bool);
 }
