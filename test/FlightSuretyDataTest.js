@@ -1,4 +1,5 @@
-/*const expect = require('chai').expect;
+/*
+const expect = require('chai').expect;
 const truffleAssert = require('truffle-assertions');
 
 const contractDefinition = artifacts.require('FlightSuretyData');
@@ -251,10 +252,9 @@ contract('FlightSuretyData', accounts => {
             await contractInstance.authorizeContract(appContractAddress, {from: owner});
         });
 
-
         it('should NOT allow unauthorized user/address to fundAirline OR getBalanceOfAirline', async() => {
             await expectToRevert(contractInstance.getBalanceOfAirline.call(accounts[1], {from: owner}), 'Caller is not authorized');
-            await expectToRevert(contractInstance.fundAirline(accounts[1], {from: owner, value: tenEther}), 'Caller is not authorized');
+            await expectToRevert(contractInstance.fundAirline(accounts[1], tenEther, {from: owner}), 'Caller is not authorized');
         });
 
         it('should return 0 if airline does not exist', async() => {
@@ -269,20 +269,19 @@ contract('FlightSuretyData', accounts => {
         });
 
         it('should allow authorizedContract to fundAirline and return the getBalanceOfAirline', async() => {
-            await contractInstance.fundAirline(accounts[0], {from: appContractAddress, value: tenEther});
-            await contractInstance.fundAirline(accounts[1], {from: appContractAddress, value: twentyEther});
+            await contractInstance.fundAirline(accounts[0], tenEther, {from: appContractAddress});
+            await contractInstance.fundAirline(accounts[1], twentyEther, {from: appContractAddress});
 
             let balance = await contractInstance.getBalanceOfAirline.call(accounts[0], {from: appContractAddress}); 
             expect(Number(balance)).to.equal(Number(tenEther));
             balance = await contractInstance.getBalanceOfAirline.call(accounts[1], {from: appContractAddress}); 
             expect(Number(balance)).to.equal(Number(twentyEther));
-
         });
 
         it('should NOT allow authorizedContract to fundAirline OR getBalanceOfAirline if contract is paused', async() => {
             await contractInstance.setOperatingStatus(false, {from: appContractAddress});
             await expectToRevert(contractInstance.getBalanceOfAirline.call(accounts[1], {from: appContractAddress}), 'Contract is currently not operational');
-            await expectToRevert(contractInstance.fundAirline(accounts[1], {from: appContractAddress, value: tenEther}), 'Contract is currently not operational');
+            await expectToRevert(contractInstance.fundAirline(accounts[1], tenEther, {from: appContractAddress}), 'Contract is currently not operational');
         });
     });
 
@@ -375,11 +374,11 @@ contract('FlightSuretyData', accounts => {
         });
 
         it('should NOT allow unauthorized user/address to buyInsurance', async() => {
-            await expectToRevert(contractInstance.buyInsurance(flightKey, accounts[1], {from: owner, value: oneEther}), 'Caller is not authorized');
+            await expectToRevert(contractInstance.buyInsurance(flightKey, accounts[1], oneEther, {from: owner}), 'Caller is not authorized');
         });
 
         it('should allow authorizedContract to buyInsurance for a client & flight and update the insurance keys, details and balances', async() => {
-            await contractInstance.buyInsurance(flightKey, accounts[1], {from: appContractAddress, value: oneEther});
+            await contractInstance.buyInsurance(flightKey, accounts[1], oneEther, {from: appContractAddress});
             
             let insuranceKeys = await contractInstance.getInsuraceKeysForFlight.call(flightKey, {from: appContractAddress});
             expect(insuranceKeys).to.have.lengthOf(1);
@@ -395,7 +394,7 @@ contract('FlightSuretyData', accounts => {
     
         it('should NOT allow authorizedContract to buyInsurance if contract is paused', async() => {
             await contractInstance.setOperatingStatus(false, {from: appContractAddress});
-            await expectToRevert(contractInstance.buyInsurance(flightKey, accounts[2], {from: appContractAddress, value: oneEther}), 'Contract is currently not operational');
+            await expectToRevert(contractInstance.buyInsurance(flightKey, accounts[2], oneEther, {from: appContractAddress}), 'Contract is currently not operational');
         });
     });
 
@@ -407,7 +406,7 @@ contract('FlightSuretyData', accounts => {
             contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
             await contractInstance.authorizeContract(appContractAddress, {from: owner});
             await contractInstance.registerFlight(accounts[0], flightNumber, 1122334455, 20, {from: appContractAddress});
-            await contractInstance.fundAirline(accounts[0], {from: appContractAddress, value: tenEther});
+            await contractInstance.fundAirline(accounts[0], tenEther, {from: appContractAddress});
             flightKey = (await contractInstance.getFlightDetails(flightNumber, {from: appContractAddress}))[4];
         });
 
@@ -416,8 +415,8 @@ contract('FlightSuretyData', accounts => {
         });
 
         it('should credit all insurees for the given flight and verify this', async() => {
-            await contractInstance.buyInsurance(flightKey, accounts[1], {from: appContractAddress, value: oneEther});
-            await contractInstance.buyInsurance(flightKey, accounts[2], {from: appContractAddress, value: twoEther});
+            await contractInstance.buyInsurance(flightKey, accounts[1], oneEther, {from: appContractAddress});
+            await contractInstance.buyInsurance(flightKey, accounts[2], twoEther, {from: appContractAddress});
 
             let insuranceKeys = await contractInstance.getInsuraceKeysForFlight.call(flightKey, {from: appContractAddress});
             expect(insuranceKeys).to.have.lengthOf(2);
@@ -487,13 +486,18 @@ contract('FlightSuretyData', accounts => {
         });
 
         it('should NOT pay if insuree does not have enough balance', async() => {
-            await contractInstance.fundAirline(accounts[0], {from: appContractAddress, value: tenEther});
+            await contractInstance.fundAirline(accounts[0], tenEther, {from: appContractAddress});
+            
+            //simulate that appcontract has sent some ether on the data contract
+            await contractInstance.sendTransaction({from: owner, value:tenEther});
             await expectToRevert(contractInstance.pay(accounts[1], threeEther, {from: appContractAddress}), 
                                 'The desired amount exceedes insuree balance');
         });
 
         it('should allow authorizedContract to pay/transfer ether to the customer and deduct from insuree Balance', async() => {
-            await contractInstance.buyInsurance(flightKey, accounts[2], {from: appContractAddress, value: twoEther});
+            await contractInstance.buyInsurance(flightKey, accounts[2], twoEther, {from: appContractAddress});
+            
+            
             let insureeContractBalance = await contractInstance.getBalanceOfInsuree.call(accounts[2], {from: appContractAddress});
             expect(Number(insureeContractBalance)).to.equal(0);
             

@@ -79,6 +79,10 @@ contract FlightSuretyData {
         numberOfAirlines = numberOfAirlines.add(1);
     }
 
+    function () external payable {
+
+    }
+
     /**
      * @dev Authorize one contract to use all this contract's methonds
      * @param contractAddress The new authorized contract's address
@@ -124,15 +128,9 @@ contract FlightSuretyData {
     }
 
     /**
-     * @dev Client buys (and sends ether) for insurance for a flight
+     * @dev Client buys insurance for a flight; AppContract should send the ether first before insuring the passenger
      */   
-    function buyInsurance(bytes32 flightKey, address _insuree) 
-        external 
-        payable 
-        isAuthorized 
-        isOperational
-    {
-        uint256 amount = msg.value;
+    function buyInsurance(bytes32 flightKey, address _insuree, uint256 amount) external isAuthorized isOperational {
         bytes32 insuranceKey = generateKey(_insuree, flightKey, amount);
         insurances[insuranceKey] = Insurance(_insuree, amount, false);
         flightInsurances[flightKey].push(insuranceKey);
@@ -169,8 +167,8 @@ contract FlightSuretyData {
      * resulting in insurance payouts, the contract should be self-sustaining.
      * This is the method freshly joined airlines would call to pay their fee after they have been vetted in
      */   
-    function fundAirline(address airline) external payable isAuthorized isOperational {
-        airlineBalances[airline] = airlineBalances[airline].add(msg.value);
+    function fundAirline(address airline, uint256 amount) external isAuthorized isOperational {
+        airlineBalances[airline] = airlineBalances[airline].add(amount);
     }
 
     function getAirline(address _address) 

@@ -18,12 +18,15 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
     uint256 private FEE =  10 ether;
+    uint256 private CONSENSUS = 4; //max number of airlines without consensus rule
+    uint256 private CONSENSUS_RULE = 5; // percentage of airlines to vote for consensus
 
     address private contractOwner;          // Account used to deploy contract
     bool private operational = true; 
     FlightSuretyData data; //data contract
+    address private dataAddress;
 
-    mapping(address => uint256) airlineVotes;    
+    mapping(address => address[]) airlineVotes; //airlineAddress -> address[] voters   
 
     event AirlineRegistered(address indexed airline, uint256 votes);
 
@@ -61,6 +64,15 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier newValidAirline(address newAirline) {
+        require (address(0x0) != newAirline, 'Invalid address to register');
+        bool isRegistered;
+        bool isValidated;
+        (,isRegistered,isValidated) = data.getAirline(newAirline);
+        require (!isRegistered && !isValidated, 'Airline is already validated');
+        _;
+    }
+
     modifier minimumFee(uint256 fee){
         require(msg.value >= fee, 'Minimum fee required for funding');
         _;
@@ -71,6 +83,7 @@ contract FlightSuretyApp {
      */
     constructor(address _dataContractAddress) public {
         contractOwner = msg.sender;
+        dataAddress = _dataContractAddress;
         data = FlightSuretyData(_dataContractAddress);
     }
 
@@ -86,11 +99,26 @@ contract FlightSuretyApp {
     /**
      * @dev Add an airline to the registration queue
      */   
-    function registerAirline() external { 
-        emit AirlineRegistered(msg.sender, airlineVotes[msg.sender]);
+    function registerAirline(address _newAirline, bytes32 airlineName) 
+        external 
+        isOperational
+        airlineValidated
+        newValidAirline(_newAirline)
+    { 
+        uint256 numberOfAirlines = data.getNumberOfAirlines();
+        if (CONSENSUS > numberOfAirlines) {
+            registerValidAirline(_newAirline, airlineName, 1);
+        } else {
+            voteIfHasNotVoted(msg.sender, _newAirline);
+            registerIfConsensusAchieved(_newAirline, numberOfAirlines, airlineName);
+        }
     }
 
     function fundAirline() external payable isOperational airlineRegistered minimumFee(FEE) {
+        address payable dataContractAddress = address(uint160(dataAddress));
+        dataContractAddress.transfer(msg.value);
+        data.fundAirline(msg.sender, msg.value);
+        data.validateAirline(msg.sender);
         emit AirlineFunded(msg.sender, msg.value);
     }
 
@@ -127,6 +155,35 @@ contract FlightSuretyApp {
 
         emit OracleRequest(index, airline, flight, timestamp);
     } 
+
+    function voteIfHasNotVoted(address voter, address _newAirline) private {
+        bool hasVoted = false; 
+        for (uint i=0; i< airlineVotes[_newAirline].length; i++){
+            if (airlineVotes[_newAirline][i] == voter){
+                hasVoted = true;
+                break;
+            }
+        }
+        if(!hasVoted){
+            airlineVotes[_newAirline].push(voter);
+        }
+    }
+
+    function registerIfConsensusAchieved(address airline, uint256 nrOfAirlines, bytes32 name) private {
+        uint256 requiredVotes = nrOfAirlines.mul(CONSENSUS_RULE).div(10);
+        uint256 mod10 = nrOfAirlines.mul(CONSENSUS_RULE).mod(10);
+        if (mod10 >= 5) {
+            requiredVotes = requiredVotes.add(1);
+        }
+        if(airlineVotes[airline].length >= requiredVotes) {
+            registerValidAirline(airline, name, airlineVotes[airline].length);
+        }
+    }
+
+    function registerValidAirline(address airline, bytes32 name, uint256 votes) private {
+        data.registerAirline(airline, name);
+        emit AirlineRegistered(airline, votes);
+    }
 
 
 // region ORACLE MANAGEMENT
@@ -271,4 +328,8 @@ contract FlightSuretyApp {
 
 contract FlightSuretyData {
     function getAirline(address _address) external view returns(bytes32, bool, bool);
+    function validateAirline(address _address) external;
+    function fundAirline(address airline, uint256 amount) external;
+    function getNumberOfAirlines() external view returns(uint256);
+    function registerAirline(address _address, bytes32 name) external;
 }
