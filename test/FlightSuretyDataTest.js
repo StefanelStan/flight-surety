@@ -16,7 +16,8 @@ contract('FlightSuretyData', accounts => {
     const threeEther = web3.utils.toWei('3', 'ether');
     const tenEther = web3.utils.toWei('10', 'ether');
     const eightAndAHalfEther = web3.utils.toWei('8.5', 'ether');
-    
+    const zeroAddress = '0x0000000000000000000000000000000000000000';
+
     describe ('Test suite: isContractOperational', () => {
         before(async() => {
             contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
@@ -162,8 +163,9 @@ contract('FlightSuretyData', accounts => {
             await expectToRevert(contractInstance.getFlightDetails(flightNumber, {from: owner}), 'Caller is not authorized');
         });
 
-        it('should revert if the flight does not exist', async() => {
-            await expectToRevert(contractInstance.getFlightDetails(flightNumber, {from: appContractAddress}), 'Flight Number does not exist');
+        it('should return empty values if the flight does not exist', async() => {
+            let flight =  await contractInstance.getFlightDetails(flightNumber, {from: appContractAddress});
+            expectFlightToHaveProperties(flight, zeroAddress, '', 0, 0);
         });
 
         it('should NOT allow authorizedContract to getFlightDetails if contract is paused', async () => {
@@ -529,8 +531,8 @@ const expectToRevert = (promise, errorMessage) => {
     return truffleAssert.reverts(promise, errorMessage);
 };
 
-const expectFlightToHaveProperties = (flight, airline, flightNumber, timeStamp, statusCode) => {
-    expect(flight[0]).to.equal(airline);
+const expectFlightToHaveProperties = (flight, airlineAddress, flightNumber, timeStamp, statusCode) => {
+    expect(flight[0]).to.equal(airlineAddress);
     expect(web3.utils.hexToUtf8(flight[1])).to.equal(flightNumber);
     expect(Number(flight[2])).to.equal(timeStamp);
     expect(Number(flight[3])).to.equal(statusCode);

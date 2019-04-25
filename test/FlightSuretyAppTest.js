@@ -22,7 +22,7 @@ contract('FlightSuretyApp', accounts => {
     const twelveEther = web3.utils.toWei('12', 'ether');
     const eightAndAHalfEther = web3.utils.toWei('8.5', 'ether');
     const zeroAddress = '0x0000000000000000000000000000000000000000';
-
+/*
     describe ('Test suite: isContractOperational', () => {
         before(async() => {
             const dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
@@ -194,7 +194,7 @@ contract('FlightSuretyApp', accounts => {
             truffleAssert.eventNotEmitted(tx, 'AirlineRegistered');
             await expectToRevert(contractInstance.fundAirline({from: accounts[5], value: tenEther}), 'Caller is not a registered airline');
 
-            //Attempt to simulate that multi-party doesn't count twice the same caller
+            //Attempt to simulate that multi-party doesn't count the same caller twice 
             tx = await contractInstance.registerAirline(accounts[5], web3.utils.utf8ToHex('SixthAirline'), {from: accounts[3]});
             truffleAssert.eventNotEmitted(tx, 'AirlineRegistered');
             await expectToRevert(contractInstance.fundAirline({from: accounts[5], value: tenEther}), 'Caller is not a registered airline');
@@ -216,16 +216,75 @@ contract('FlightSuretyApp', accounts => {
             await expectToRevert(contractInstance.registerAirline(accounts[7], web3.utils.utf8ToHex(secondAirline), {from: owner}), 'Contract is currently not operational');
         }); 
     });
-    
-    //further test for airlines to register flights
+*/    
+    describe('Test suite: getFlightDetails', () => {
+        let dataContract;
+        before(async() => {
+            dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            await dataContract.authorizeContract(contractInstance.address, {from: owner});
+            await dataContract.authorizeContract(owner, {from: owner});
+        });
+
+        it('should return empty values if the flight does not exist', async() => {
+            const flight = await contractInstance.getFlightDetails(flightNumber, {from: accounts[1]});
+            expectFlightToHaveProperties(flight, zeroAddress, '', 0, 0);
+        });
+
+        it('should return the correct values upon getFlightDetails', async() => {
+            await dataContract.registerFlight(accounts[0], flightNumber, 1122334455, 20, {from: owner});
+            const flight = await contractInstance.getFlightDetails(flightNumber, {from: accounts[1]});
+            expectFlightToHaveProperties(flight, owner, 'LT3214', 1122334455, 20);
+        });
+
+        it('should NOT allow to getFlightDetails if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.getFlightDetails(flightNumber, {from: owner}), 'Contract is currently not operational');
+        });
+    });
+
+    describe('Test suite: registerFlight', () => {
+        before(async() => {
+            const dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            await dataContract.authorizeContract(contractInstance.address, {from: owner});
+        });
+
+        it('should NOT allow unauthorized users/airlines to registerFlight', async() => {
+            await expectToRevert(contractInstance.registerFlight(flightNumber, 1122334455, {from: accounts[1]}), 'Caller is not a validated airline');
+        });
+
+        it('should NOT allow registered but unvalidated airlines to registerFlight', async() => {
+            await expectToRevert(contractInstance.registerFlight(flightNumber, 1122334455, {from: owner}), 'Caller is not a validated airline');
+        });
+
+        it('should allow validated airlines to registerFlight and verify this', async() => {
+            await contractInstance.fundAirline({from: owner, value:tenEther});
+            
+            await contractInstance.registerFlight(flightNumber, 1122334455, {from: owner});
+            let flight = await contractInstance.getFlightDetails(flightNumber, {from: accounts[1]});
+            expectFlightToHaveProperties(flight, owner, 'LT3214', 1122334455, 0);
+        });
+
+        it('should NOT allow to registerFlight an already existing flight number', async() => {
+            await expectToRevert(contractInstance.registerFlight(flightNumber, 22334455, {from: owner}), 'Flight already registered');
+        });
+        
+        it('should NOT allow a validated airline to registerFlight if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.registerFlight(flightNumber, 22334455, {from: owner}), 'Contract is currently not operational');
+        });
+    });
+
+    // 25/04/2019 21:20 : continue with getAllFlights and then purchase flight insurance and credit insurance
 });   
 
 const expectToRevert = (promise, errorMessage) => {
     return truffleAssert.reverts(promise, errorMessage);
 };
 
-const expectFlightToHaveProperties = (flight, airline, flightNumber, timeStamp, statusCode) => {
-    expect(flight[0]).to.equal(airline);
+const expectFlightToHaveProperties = (flight, airlineAddress, flightNumber, timeStamp, statusCode) => {
+    expect(flight[0]).to.equal(airlineAddress);
     expect(web3.utils.hexToUtf8(flight[1])).to.equal(flightNumber);
     expect(Number(flight[2])).to.equal(timeStamp);
     expect(Number(flight[3])).to.equal(statusCode);

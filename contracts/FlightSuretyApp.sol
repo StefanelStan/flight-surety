@@ -78,6 +78,13 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier flightInexistent(bytes32 flightNumber) {
+        address airline;
+        (airline,,,,) = data.getFlightDetails(flightNumber);
+        require(airline == address(0), 'Flight already registered');
+        _;
+    }
+
     /**
      * @dev Contract constructor
      */
@@ -122,11 +129,32 @@ contract FlightSuretyApp {
         emit AirlineFunded(msg.sender, msg.value);
     }
 
+    function getFlightDetails(bytes32 _flightNumber) external view isOperational
+        returns (
+            address, 
+            bytes32, 
+            uint256, 
+            uint8
+        )
+    {
+        address airline;
+        bytes32 flightNumber;
+        uint256 timestamp;
+        uint8 statusCode;
+        (airline, flightNumber, timestamp, statusCode,) = data.getFlightDetails(_flightNumber);
+        return (airline, flightNumber, timestamp, statusCode);
+    }        
+    
     /**
      * @dev Register a future flight for insuring.
      */  
-    function registerFlight() external pure {
-
+    function registerFlight(bytes32 flightNumber, uint256 timestamp) 
+        external 
+        isOperational
+        airlineValidated
+        flightInexistent(flightNumber)
+    {
+        data.registerFlight(msg.sender, flightNumber, timestamp, STATUS_CODE_UNKNOWN);
     }
     
     /**
@@ -146,7 +174,9 @@ contract FlightSuretyApp {
 
 
     // Generate a request for oracles to fetch flight information
-    function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) external {
+    function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) 
+        external
+    {
         uint8 index = getRandomIndex(msg.sender);
 
         // Generate a unique key for storing the request
@@ -169,7 +199,9 @@ contract FlightSuretyApp {
         }
     }
 
-    function registerIfConsensusAchieved(address airline, uint256 nrOfAirlines, bytes32 name) private {
+    function registerIfConsensusAchieved(address airline, uint256 nrOfAirlines, bytes32 name) 
+        private
+    {
         uint256 requiredVotes = nrOfAirlines.mul(CONSENSUS_RULE).div(10);
         uint256 mod10 = nrOfAirlines.mul(CONSENSUS_RULE).mod(10);
         if (mod10 >= 5) {
@@ -332,4 +364,13 @@ contract FlightSuretyData {
     function fundAirline(address airline, uint256 amount) external;
     function getNumberOfAirlines() external view returns(uint256);
     function registerAirline(address _address, bytes32 name) external;
+    function getFlightDetails(bytes32 _flightNumber) external view 
+        returns (
+            address, 
+            bytes32, 
+            uint256, 
+            uint8, 
+            bytes32
+        );
+    function registerFlight(address airline, bytes32 number, uint256 time, uint8 status) external; 
 }

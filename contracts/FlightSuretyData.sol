@@ -199,15 +199,17 @@ contract FlightSuretyData {
             bytes32
         )
     {
+        Flight storage flight = flights[bytes32(0)];
         for (uint8 i = 0; i < flightKeys.length; i++){
             if(flights[flightKeys[i]].flightNumber == _flightNumber){
-                Flight storage flight = flights[flightKeys[i]];
+                flight = flights[flightKeys[i]];
                 return (flight.airline, flight.flightNumber, 
                         flight.timestamp, flight.statusCode, flightKeys[i]
                 );
             }
         }
-        revert("Flight Number does not exist");
+        return (flight.airline, flight.flightNumber, 
+                flight.timestamp, flight.statusCode, bytes32(0));
     }
 
     function getAllFlights() external view isAuthorized isOperational returns(bytes32[] memory){
