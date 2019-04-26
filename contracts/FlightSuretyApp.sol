@@ -204,7 +204,7 @@ contract FlightSuretyApp {
     {
         uint256 requiredVotes = nrOfAirlines.mul(CONSENSUS_RULE).div(10);
         uint256 mod10 = nrOfAirlines.mul(CONSENSUS_RULE).mod(10);
-        if (mod10 >= 5) {
+        if (mod10 >= 1) {
             requiredVotes = requiredVotes.add(1);
         }
         if(airlineVotes[airline].length >= requiredVotes) {
