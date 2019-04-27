@@ -31,6 +31,8 @@ contract FlightSuretyApp {
     event AirlineRegistered(address indexed airline, uint256 votes);
 
     event AirlineFunded(address indexed airline, uint256 value);
+
+    event InsurancePurchased(address indexed passenger, bytes32 flightNumber, uint256 amount);
     /**
      * @dev Modifier that requires the "operational" boolean variable to be "true"
      * This is used on all state changing functions to pause the contract in 
@@ -82,6 +84,23 @@ contract FlightSuretyApp {
         address airline;
         (airline,,,,) = data.getFlightDetails(flightNumber);
         require(airline == address(0), 'Flight already registered');
+        _;
+    }
+
+    modifier flightExistent(bytes32 flightNumber) {
+        address airline;
+        (airline,,,,) = data.getFlightDetails(flightNumber);
+        require(airline != address(0), 'Flight does not exist');
+        _;
+    }
+
+    modifier notInsured(bytes32 flightNumber) {
+        bytes32 flightKey;
+        (,,,,flightKey) = data.getFlightDetails(flightNumber);
+        bytes32 insuranceKey = generateKey(msg.sender, flightKey, 0);
+        address insuree;
+        (insuree,,) = data.getInsuranceDetails(insuranceKey);
+        require(insuree == address(0), 'Insurance exists already');
         _;
     }
 
@@ -156,6 +175,26 @@ contract FlightSuretyApp {
     {
         data.registerFlight(msg.sender, flightNumber, timestamp, STATUS_CODE_UNKNOWN);
     }
+
+    function getAllFlights() external view isOperational returns(bytes32[] memory) {
+        return data.getAllFlights();
+    }
+
+    function buyInsurance(bytes32 flightNumber) 
+        external 
+        payable 
+        isOperational 
+        flightExistent(flightNumber)
+        notInsured(flightNumber) 
+    {
+        //send the money and buy insurance and top up the airline balance
+        bytes32 flightKey;
+        (,,,,flightKey) = data.getFlightDetails(flightNumber);
+        address payable dataContractAddress = address(uint160(dataAddress));
+        dataContractAddress.transfer(msg.value);
+        data.buyInsurance(flightKey, msg.sender, msg.value);
+        emit InsurancePurchased(msg.sender, flightNumber, msg.value);
+    }
     
     /**
      * @dev Called after oracle has updated flight status
@@ -215,6 +254,15 @@ contract FlightSuretyApp {
     function registerValidAirline(address airline, bytes32 name, uint256 votes) private {
         data.registerAirline(airline, name);
         emit AirlineRegistered(airline, votes);
+    }
+
+    function generateKey (address _address, bytes32 key, uint256 value)
+        internal
+        view
+        isOperational
+        returns(bytes32) 
+    {
+        return keccak256(abi.encodePacked(_address, key, value));
     }
 
 
@@ -372,5 +420,8 @@ contract FlightSuretyData {
             uint8, 
             bytes32
         );
-    function registerFlight(address airline, bytes32 number, uint256 time, uint8 status) external; 
+    function registerFlight(address airline, bytes32 number, uint256 time, uint8 status) external;
+    function getAllFlights() external view returns(bytes32[] memory);
+    function getInsuranceDetails(bytes32 insuranceKey) external view returns(address, uint256, bool);
+    function buyInsurance(bytes32 flightKey, address _insuree, uint256 amount) external;
 }

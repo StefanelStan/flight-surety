@@ -131,7 +131,7 @@ contract FlightSuretyData {
      * @dev Client buys insurance for a flight; AppContract should send the ether first before insuring the passenger
      */   
     function buyInsurance(bytes32 flightKey, address _insuree, uint256 amount) external isAuthorized isOperational {
-        bytes32 insuranceKey = generateKey(_insuree, flightKey, amount);
+        bytes32 insuranceKey = generateKey(_insuree, flightKey, 0);
         insurances[insuranceKey] = Insurance(_insuree, amount, false);
         flightInsurances[flightKey].push(insuranceKey);
         airlineBalances[flights[flightKey].airline] = airlineBalances[flights[flightKey].airline].add(amount);
