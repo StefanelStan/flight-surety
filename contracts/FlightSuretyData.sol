@@ -127,6 +127,14 @@ contract FlightSuretyData {
         flightKeys.push(key);
     }
 
+    function setFlightStatus(bytes32 flightKey, uint8 _statusCode) 
+        external
+        isAuthorized 
+        isOperational
+    {
+        flights[flightKey].statusCode = _statusCode;
+    }
+
     /**
      * @dev Client buys insurance for a flight; AppContract should send the ether first before insuring the passenger
      */   

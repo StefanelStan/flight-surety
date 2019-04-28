@@ -17,7 +17,8 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
-    uint256 private FEE =  10 ether;
+    uint256 private AIRLINE_FEE =  10 ether;
+    uint256 private MAX_INSURANCE =  1 ether; 
     uint256 private CONSENSUS = 4; //max number of airlines without consensus rule
     uint256 private CONSENSUS_RULE = 5; // percentage of airlines to vote for consensus
 
@@ -76,7 +77,7 @@ contract FlightSuretyApp {
     }
 
     modifier minimumFee(uint256 fee){
-        require(msg.value >= fee, 'Minimum fee required for funding');
+        require(msg.value >= fee, 'Minimum fee is required'); 
         _;
     }
 
@@ -109,7 +110,6 @@ contract FlightSuretyApp {
      */
     constructor(address _dataContractAddress) public {
         contractOwner = msg.sender;
-        dataAddress = _dataContractAddress;
         data = FlightSuretyData(_dataContractAddress);
     }
 
@@ -140,8 +140,8 @@ contract FlightSuretyApp {
         }
     }
 
-    function fundAirline() external payable isOperational airlineRegistered minimumFee(FEE) {
-        address payable dataContractAddress = address(uint160(dataAddress));
+    function fundAirline() external payable isOperational airlineRegistered minimumFee(AIRLINE_FEE) {
+        address payable dataContractAddress = address(uint160(address(data)));
         dataContractAddress.transfer(msg.value);
         data.fundAirline(msg.sender, msg.value);
         data.validateAirline(msg.sender);
@@ -188,9 +188,10 @@ contract FlightSuretyApp {
         notInsured(flightNumber) 
     {
         //send the money and buy insurance and top up the airline balance
+        require(msg.value <= MAX_INSURANCE, 'Exceeded maximum allowed insurance');
         bytes32 flightKey;
         (,,,,flightKey) = data.getFlightDetails(flightNumber);
-        address payable dataContractAddress = address(uint160(dataAddress));
+        address payable dataContractAddress = address(uint160(address(data)));
         dataContractAddress.transfer(msg.value);
         data.buyInsurance(flightKey, msg.sender, msg.value);
         emit InsurancePurchased(msg.sender, flightNumber, msg.value);
@@ -201,7 +202,7 @@ contract FlightSuretyApp {
      */  
     function processFlightStatus(
         address airline, 
-        string memory flight, 
+        bytes32 flightNumber, 
         uint256 timestamp, 
         uint8 statusCode
     )
@@ -213,16 +214,25 @@ contract FlightSuretyApp {
 
 
     // Generate a request for oracles to fetch flight information
-    function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) 
+    function fetchFlightStatus(bytes32 flightNumber) 
         external
+        isOperational
+        onlyOwner
     {
+        address airline;
+        uint256 timestamp;
+        uint8 statusCode;
+        (airline,,timestamp, statusCode,) = data.getFlightDetails(flightNumber);
+        require(airline != address(0), 'Flight does not exist');
+        require(statusCode == STATUS_CODE_UNKNOWN, 'Flight status already fetched');
+        
         uint8 index = getRandomIndex(msg.sender);
-
-        // Generate a unique key for storing the request
-        bytes32 key = keccak256(abi.encodePacked(index, airline, flight, timestamp));
+        // Generate a unique key for storing the request //i would use the flight key for it
+        bytes32 key = keccak256(abi.encodePacked(index, airline, flightNumber, timestamp));
         oracleResponses[key] = ResponseInfo(msg.sender,true);
-
-        emit OracleRequest(index, airline, flight, timestamp);
+        // Oracles will need to know the airline number, flight and time to they can look up to it. 
+        // The index 0-9 will tell them if they should bother with the info or not
+        emit OracleRequest(index, airline, flightNumber, timestamp);
     } 
 
     function voteIfHasNotVoted(address voter, address _newAirline) private {
@@ -277,7 +287,6 @@ contract FlightSuretyApp {
     // Number of oracles that must respond for valid status
     uint256 private constant MIN_RESPONSES = 3;
 
-
     struct Oracle {
         bool isRegistered;
         uint8[3] indexes;        
@@ -300,27 +309,24 @@ contract FlightSuretyApp {
     mapping(bytes32 => ResponseInfo) private oracleResponses;
 
     // Event fired each time an oracle submits a response
-    event FlightStatusInfo(address airline, string flight, uint256 timestamp, uint8 status);
+    event FlightStatusInfo(address airline, bytes32 flightNumber, uint256 timestamp, uint8 status);
 
-    event OracleReport(address airline, string flight, uint256 timestamp, uint8 status);
+    event OracleReport(address airline, bytes32 flightNumber, uint256 timestamp, uint8 status);
 
     // Event fired when flight status request is submitted
     // Oracles track this and if they have a matching index
     // they fetch data and submit a response
-    event OracleRequest(uint8 index, address airline, string flight, uint256 timestamp);
-
+    event OracleRequest(uint8 index, address airline, bytes32 flightNumber, uint256 timestamp);
 
     // Register an oracle with the contract
-    function registerOracle() external payable {
-        // Require registration fee
-        require(msg.value >= REGISTRATION_FEE, "Registration fee is required");
+    function registerOracle() external payable isOperational minimumFee(REGISTRATION_FEE){
+        require(oracles[msg.sender].isRegistered == false, "Oracle already registered");
 
         uint8[3] memory indexes = generateIndexes(msg.sender);
-
         oracles[msg.sender] = Oracle(true, indexes);
     }
 
-    function getMyIndexes() view external returns(uint8[3] memory) {
+    function getMyIndexes() view external isOperational returns(uint8[3] memory) {
         require(oracles[msg.sender].isRegistered, "Not registered as an oracle");
 
         return oracles[msg.sender].indexes;
@@ -333,7 +339,7 @@ contract FlightSuretyApp {
     function submitOracleResponse(
         uint8 index, 
         address airline, 
-        string calldata flight, 
+        bytes32 flight, 
         uint256 timestamp,
         uint8 statusCode
     )
@@ -364,7 +370,7 @@ contract FlightSuretyApp {
     }
 
 
-    function getFlightKey(address airline, string memory flight, uint256 timestamp) 
+    function getFlightKey(address airline, bytes32 flight, uint256 timestamp) 
         pure 
         internal 
         returns(bytes32) 

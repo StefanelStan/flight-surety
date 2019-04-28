@@ -1,4 +1,3 @@
-/*
 const expect = require('chai').expect;
 const truffleAssert = require('truffle-assertions');
 
@@ -196,6 +195,36 @@ contract('FlightSuretyData', accounts => {
             await contractInstance.setOperatingStatus(false, {from: appContractAddress});
             await expectToRevert(contractInstance.registerFlight(accounts[1], flightNumber, 1122334455, 20, {from: appContractAddress}), 'Contract is currently not operational');
         });
+    });
+
+    describe('Test suite: setFlightStatus', () => {
+        const flightNumber = web3.utils.utf8ToHex('LT3214');
+
+        before(async() => {
+            contractInstance = await contractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            await contractInstance.authorizeContract(appContractAddress, {from: owner});
+            await contractInstance.registerFlight(accounts[1], flightNumber, 1122334455, 20, {from: appContractAddress});
+        });
+
+        it('should NOT allow unauthorized user/address to setFlightStatus', async() => {
+            await expectToRevert(contractInstance.setFlightStatus(flightNumber, 30, {from: owner}), 'Caller is not authorized');
+        });
+
+        it('should allow authorizedContract to setFlightStatus and verify this', async() => {
+            let flight = await contractInstance.getFlightDetails(flightNumber, {from: appContractAddress});
+            expect(Number(flight[3])).to.equal(20);
+            
+            await contractInstance.setFlightStatus(flight[4], 30, {from: appContractAddress});
+            flight = await contractInstance.getFlightDetails(flightNumber, {from: appContractAddress});
+            expect(Number(flight[3])).to.equal(30);
+        });
+
+        it('should NOT allow authorizedContract to setFlightStatus if contract is paused', async () => {
+            await contractInstance.setOperatingStatus(false, {from: appContractAddress});
+            await expectToRevert(contractInstance.setFlightStatus(flightNumber, 30, {from: appContractAddress}), 'Contract is currently not operational');
+        });
+
+
     });
 
     describe('Test suite: getAllFlights', () => {
@@ -549,4 +578,3 @@ var expectToFail = async(promise, errorType, errorMessage) => {
     }
     assert.fail(`Expected to throw an ${errorType} with message ${errorMessage}`);
 }
-*/

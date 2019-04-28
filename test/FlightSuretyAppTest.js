@@ -76,7 +76,7 @@ contract('FlightSuretyApp', accounts => {
         });
 
         it('should NOT allow the airline to fundAirline itself if value sent if less than minimum', async() => {
-            await expectToRevert(contractInstance.fundAirline({from: owner, value: threeEther}), 'Minimum fee required for funding');
+            await expectToRevert(contractInstance.fundAirline({from: owner, value: threeEther}), 'Minimum fee is required');
         });
 
         it('should allow the airline to fundAirline itself only, send event and store eth on data contract', async() => {
@@ -339,11 +339,13 @@ contract('FlightSuretyApp', accounts => {
             await expectToRevert(contractInstance.buyInsurance(flightNumberOne, {from: accounts[1]}), 'Flight does not exist')    
         });
 
-        it('should allow to buyInsurance for a registered flight, transfer the eth to dataContract, credit balance of airline and emit event', async() => {
+        it('should NOT allow to buyInsurance if value is more than 1 ether', async() => {
             await contractInstance.fundAirline({from: owner, value:tenEther});
             await contractInstance.registerFlight(flightNumberOne, 1122334455, {from: owner});
-            flightKey = (await dataContract.getFlightDetails.call(flightNumberOne, {from: owner}))[4];
-            
+            await expectToRevert(contractInstance.buyInsurance(flightNumberOne, {from: accounts[2], value: twoEther}), 'Exceeded maximum allowed insurance');
+        });
+
+        it('should allow to buyInsurance for a registered flight, transfer the eth to dataContract, credit balance of airline and emit event', async() => {
             // record passenger, dataContract and airline (credited balance) before the purchase of insurance
             const passengerWalletBalanceBefore = await web3.eth.getBalance(accounts[2]);
             const dataContractWalletBalanceBefore = await web3.eth.getBalance(dataContract.address);
@@ -356,6 +358,7 @@ contract('FlightSuretyApp', accounts => {
                        && expect(web3.utils.hexToUtf8(ev.flightNumber)).to.equal('LT3214')
                        && expect(Number(ev.amount)).to.equal(Number(oneEther));
             });
+            flightKey = (await dataContract.getFlightDetails.call(flightNumberOne, {from: owner}))[4];
             const insuranceKey = web3.utils.soliditySha3(accounts[2], flightKey, 0);
             const insuranceDetails = await dataContract.getInsuranceDetails(insuranceKey, {from: owner});
             expect(insuranceDetails[0]).to.equal(accounts[2]);
@@ -385,6 +388,108 @@ contract('FlightSuretyApp', accounts => {
     // 27/04/2019 21:32 continue with credit insuree (withdraw eth from customer) and an oracle mechanism 
     // This should have no effect if insuree has no balance. Also make sure you have a mechanism to protect the other airlines from draining
     // Also have to calculate delta for insurances percentages
+
+    describe('Test suite: registerOracle', () => {
+        let minFee;
+        before(async() => {
+            const dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
+        });
+
+        it('should NOT allow to registerOracle if mimimum fee is not paid', async() => {
+            await expectToRevert(contractInstance.registerOracle({from: accounts[1]}), 'Minimum fee is required');
+        });
+
+        it('should allow to registerOracle if mimimum fee is paid', async() => {
+            await contractInstance.registerOracle({from: accounts[1], value: minFee});
+        });
+
+        it('should NOT allow to registerOracle if is already registered', async() => {
+            await expectToRevert(contractInstance.registerOracle({from: accounts[1], value: minFee}), 'Oracle already registered');
+        });
+
+        it('should NOT allow to registerOracle if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.registerOracle({from: accounts[1], value: minFee}), 'Contract is currently not operational');
+        });
+    });
+
+    describe('Test suite: getMyIndexes', () => {
+        let minFee;
+        before(async() => {
+            const dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
+        });
+
+        it('should NOT allow to getMyIndexes for an unregistered oracle', async() => {
+            await expectToRevert(contractInstance.getMyIndexes.call({from: accounts[1]}), 'Not registered as an oracle');
+        });
+
+        it('should return a list of distinct indexes 0-9 for each registred oracle', async() => {
+            await contractInstance.registerOracle({from: accounts[1], value: minFee});
+            await contractInstance.registerOracle({from: accounts[2], value: minFee});
+
+            let indexes1 = await contractInstance.getMyIndexes.call({from: accounts[1]})
+            let indexes2 = await contractInstance.getMyIndexes.call({from: accounts[2]})
+
+            expectIndexesToHaveProperty(indexes1);
+            expectIndexesToHaveProperty(indexes2);
+        });
+
+        it('should NOT allow to getMyIndexes if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.getMyIndexes.call({from: accounts[1]}), 'Contract is currently not operational');
+        });
+
+        const expectIndexesToHaveProperty = (indexes) =>{
+            expect(indexes).to.have.lengthOf(3);
+            indexes.forEach(index => {
+                expect(Number(index)).to.be.within(0, 9);
+            });
+        };
+    });
+
+    describe('Test suite: fetchFlightStatus', () => {
+        before(async() => {
+            dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            await dataContract.authorizeContract(contractInstance.address, {from: owner});
+            await dataContract.authorizeContract(owner, {from: owner});
+        });
+        
+        it('should NOT allow unauthorized user/address to call fetchFlightStatus', async() => {
+            await expectToRevert(contractInstance.fetchFlightStatus(flightNumberOne, {from: accounts[1]}), 'Caller is not contract owner');
+        });
+
+        it('should allow authorized app to trigger fetchFlightStatus and emit event for Oracles', async() => {
+            await contractInstance.fundAirline({from: owner, value:tenEther});
+            await contractInstance.registerFlight(flightNumberOne, 1122334455, {from: owner});
+
+            let tx = await contractInstance.fetchFlightStatus(flightNumberOne, {from: owner});
+            truffleAssert.eventEmitted(tx, 'OracleRequest', (ev) => {
+                return expect(Number(ev.index)).to.be.within(0, 9) 
+                       && expect(ev.airline).to.deep.equal(owner) 
+                       && expect(web3.utils.hexToUtf8(ev.flightNumber)).to.equal('LT3214')
+                       && expect(Number(ev.timestamp)).to.deep.equal(1122334455);
+            });
+        });
+
+        it('shoult NOT fetchFlightStatus for a flight number that has been fetched already', async() => {
+            let flightKey = (await dataContract.getFlightDetails.call(flightNumberOne, {from: owner}))[4];
+            await dataContract.setFlightStatus(flightKey, 25, {from: owner});
+
+            await expectToRevert(contractInstance.fetchFlightStatus(flightNumberOne, {from: owner}), 'Flight status already fetched');
+        });
+
+        it('should NOT allow to fetchFlightStatus if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.fetchFlightStatus(flightNumberOne, {from: accounts[1]}), 'Contract is currently not operational');
+        });
+    });
+
+    //21:22 28.04.2019 continue with submitOracleResponse:manage the responses and IF they are good processFlightStatus (and credit the insurees)
 
 });   
 
