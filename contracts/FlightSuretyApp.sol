@@ -105,6 +105,16 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier authorizedOracle(uint8 index){
+        require(
+            oracles[msg.sender].indexes[0] == index 
+            || oracles[msg.sender].indexes[1] == index
+            || oracles[msg.sender].indexes[2] == index,
+            'Index does not match oracle request'
+        );
+        _;
+    }
+
     /**
      * @dev Contract constructor
      */
@@ -198,7 +208,8 @@ contract FlightSuretyApp {
     }
     
     /**
-     * @dev Called after oracle has updated flight status
+     * @dev Called after min 3 oracles have submitted the same statusCode
+     * For exercise purpose, only status 20 will be considered and taken action upon
      */  
     function processFlightStatus(
         address airline, 
@@ -209,7 +220,9 @@ contract FlightSuretyApp {
        internal
        pure
     {
-
+        if(statusCode == STATUS_CODE_LATE_AIRLINE){
+            //logic here
+        }
     }
 
 
@@ -344,16 +357,12 @@ contract FlightSuretyApp {
         uint8 statusCode
     )
         external
+        isOperational
+        authorizedOracle(index)
     {
-        require(
-            (oracles[msg.sender].indexes[0] == index) 
-            || (oracles[msg.sender].indexes[1] == index) 
-            || (oracles[msg.sender].indexes[2] == index), 
-            "Index does not match oracle request"
-        );
-
         bytes32 key = keccak256(abi.encodePacked(index, airline, flight, timestamp)); 
         require(oracleResponses[key].isOpen, "Flight or timestamp do not match oracle request");
+        require(hasOracleAlreadyResponded(key) == false, 'This oracle has already submitted response');
 
         oracleResponses[key].responses[statusCode].push(msg.sender);
 
@@ -364,7 +373,7 @@ contract FlightSuretyApp {
 
             emit FlightStatusInfo(airline, flight, timestamp, statusCode);
 
-            // Handle flight status as appropriate
+            // Handle flight status as appropriate. 
             processFlightStatus(airline, flight, timestamp, statusCode);
         }
     }
@@ -409,6 +418,20 @@ contract FlightSuretyApp {
         }
 
         return random;
+    }
+
+    /**
+     * @dev Only checks if this oracle has already replied 20 (delayed) as 20 is scope of exercise
+     */
+    function hasOracleAlreadyResponded(bytes32 key) private returns(bool) {
+        bool hasResponded = false;
+        for(uint i = 0; i < oracleResponses[key].responses[STATUS_CODE_LATE_AIRLINE].length; i++){
+            if(oracleResponses[key].responses[STATUS_CODE_LATE_AIRLINE][i] == msg.sender){
+                hasResponded = true;
+                break;
+            }
+        }
+        return hasResponded;
     }
 }   
 

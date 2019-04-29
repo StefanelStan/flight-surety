@@ -324,7 +324,7 @@ contract('FlightSuretyApp', accounts => {
             await expectToRevert(contractInstance.getAllFlights.call({from: owner}), 'Contract is currently not operational');
         });
     });
-*/
+
     describe('Test suite: buyInsurance', () => {
         let flightKey;
         let dataContract;
@@ -488,9 +488,93 @@ contract('FlightSuretyApp', accounts => {
             await expectToRevert(contractInstance.fetchFlightStatus(flightNumberOne, {from: accounts[1]}), 'Contract is currently not operational');
         });
     });
-
+*/
     //21:22 28.04.2019 continue with submitOracleResponse:manage the responses and IF they are good processFlightStatus (and credit the insurees)
+    describe('Test suite: submitOracleResponse', () => {
+        let chosenIndex;
+        let minFee;
+        let timestamp = 1122334455;
+        let oracles = new Map();
+        let matchingIndexOracles = [];
+        before(async() => {
+            dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            await dataContract.authorizeContract(contractInstance.address, {from: owner});
+            await dataContract.authorizeContract(owner, {from: owner});
+            await contractInstance.fundAirline({from: owner, value: tenEther});
+            await contractInstance.registerFlight(flightNumberOne, timestamp, {from: owner});
+            let tx = await contractInstance.fetchFlightStatus(flightNumberOne, {from: owner});
+            truffleAssert.eventEmitted(tx, 'OracleRequest', (ev) => {
+                chosenIndex = Number(ev.index);
+                return true;
+            });
 
+            minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
+
+            for (let i=1; i <= 18; i++) {
+                await contractInstance.registerOracle({from: accounts[i], value: minFee});
+                let indexes = await contractInstance.getMyIndexes.call({from: accounts[i]});
+                oracles.set(accounts[i], [Number(indexes[0]), Number(indexes[1]), Number(indexes[2])]); 
+            }
+            getMatchingOracles(chosenIndex);
+        });
+
+        it('should NOT allow to submitOracleResponse if index does not belong to that oracle', async() => {
+            await expectToRevert(contractInstance.submitOracleResponse(99, owner, flightNumberOne, timestamp, 20, {from: accounts[1]}), 
+                                'Index does not match oracle request');
+        });
+
+        it('should NOT allow to submitOracleResponse if values have been tempered by the oracle', async() => {
+            await expectToRevert(contractInstance.submitOracleResponse(chosenIndex, accounts[4], flightNumberOne, timestamp, 70, {from: matchingIndexOracles[0]}), 
+                                "Flight or timestamp do not match oracle request");
+        });
+
+        it('should allow to submitOracleResponse to a valid index oracle and emit OracleReport event', async() => {
+            let tx = await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[0]});
+            truffleAssert.eventEmitted(tx, 'OracleReport', (ev) => {
+                return expect(ev.airline).to.deep.equal(owner) 
+                       && expect(web3.utils.hexToUtf8(ev.flightNumber)).to.equal('LT3214')
+                       && expect(Number(ev.timestamp)).to.deep.equal(timestamp)
+                       && expect(Number(ev.status)).to.deep.equal(20);
+            });
+        });
+
+        it('should NOT allow to submitOracleResponse twice by the same oracle', async() => {
+            await expectToRevert(contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[0]}), 
+                                'This oracle has already submitted response');
+        });
+
+        it('should emit FlightStatusInfo and processFlightStatus and creditInsurees when 3 oracles submitted statusCode 20', async() => {
+            await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[1]});
+            let tx = await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp,  20, {from: matchingIndexOracles[2]});
+            truffleAssert.eventEmitted(tx, 'FlightStatusInfo', (ev) => {
+                return expect(ev.airline).to.deep.equal(owner) 
+                       && expect(web3.utils.hexToUtf8(ev.flightNumber)).to.equal('LT3214')
+                       && expect(Number(ev.timestamp)).to.deep.equal(timestamp)
+                       && expect(Number(ev.status)).to.deep.equal(20);
+            });
+
+        });
+        
+        it('should NOT allow to submitOracleResponse if the flight is already resolved/processed', async() => {});
+
+        it('should NOT allow to submitOracleResponse if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 10, {from: matchingIndexOracles[1]}), 
+                                'Contract is currently not operational');
+        });
+
+        const getMatchingOracles = (desiredIndex) => {
+            for (let [address, indexes] of oracles) {
+                indexes.forEach(index => {
+                    if (index == desiredIndex){
+                        matchingIndexOracles.push(address);
+                        console.log(desiredIndex + '->' + address);
+                    }
+                });
+            }
+        }
+    });
 });   
 
 const expectToRevert = (promise, errorMessage) => {

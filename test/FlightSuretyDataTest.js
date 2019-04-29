@@ -1,3 +1,4 @@
+/*
 const expect = require('chai').expect;
 const truffleAssert = require('truffle-assertions');
 
@@ -578,3 +579,4 @@ var expectToFail = async(promise, errorType, errorMessage) => {
     }
     assert.fail(`Expected to throw an ${errorType} with message ${errorMessage}`);
 }
+*/
