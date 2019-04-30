@@ -20,11 +20,12 @@ contract('FlightSuretyApp', accounts => {
     const oneAndAHalfEther = web3.utils.toWei('1.5', 'ether');
     const twoEther = web3.utils.toWei('2', 'ether');
     const threeEther = web3.utils.toWei('3', 'ether');
+    const eightEther = web3.utils.toWei('8', 'ether');
     const tenEther = web3.utils.toWei('10', 'ether');
     const twelveEther = web3.utils.toWei('12', 'ether');
     const eightAndAHalfEther = web3.utils.toWei('8.5', 'ether');
     const zeroAddress = '0x0000000000000000000000000000000000000000';
-/*
+
     describe ('Test suite: isContractOperational', () => {
         before(async() => {
             const dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
@@ -488,7 +489,7 @@ contract('FlightSuretyApp', accounts => {
             await expectToRevert(contractInstance.fetchFlightStatus(flightNumberOne, {from: accounts[1]}), 'Contract is currently not operational');
         });
     });
-*/
+
     //21:22 28.04.2019 continue with submitOracleResponse:manage the responses and IF they are good processFlightStatus (and credit the insurees)
     describe('Test suite: submitOracleResponse', () => {
         let chosenIndex;
@@ -511,7 +512,7 @@ contract('FlightSuretyApp', accounts => {
 
             minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
 
-            for (let i=1; i <= 18; i++) {
+            for (let i=1; i <= 19; i++) {
                 await contractInstance.registerOracle({from: accounts[i], value: minFee});
                 let indexes = await contractInstance.getMyIndexes.call({from: accounts[i]});
                 oracles.set(accounts[i], [Number(indexes[0]), Number(indexes[1]), Number(indexes[2])]); 
@@ -545,6 +546,19 @@ contract('FlightSuretyApp', accounts => {
         });
 
         it('should emit FlightStatusInfo and processFlightStatus and creditInsurees when 3 oracles submitted statusCode 20', async() => {
+            if(matchingIndexOracles.length <3){
+                assert.fail(`Test failed as less than 3 oracles have the correct index of ${chosenIndex}`);
+            }
+            //buy 4 insurances from accounts[20-23] and watch if their contract balances get credited and airline balance gets deducted
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[20], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[21], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[22], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[23], value: oneEther});
+            const customerOneBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            const airlineBalanceBefore = await dataContract.getBalanceOfAirline(owner, {from: owner});
+            expect(Number(customerOneBalanceBefore)).to.equal(Number(0));
+            expect(Number(airlineBalanceBefore)).to.equal(Number(web3.utils.toWei('14', 'ether'))); // 10 FEE + 4 x INSURANCE FEE
+
             await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[1]});
             let tx = await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp,  20, {from: matchingIndexOracles[2]});
             truffleAssert.eventEmitted(tx, 'FlightStatusInfo', (ev) => {
@@ -554,9 +568,78 @@ contract('FlightSuretyApp', accounts => {
                        && expect(Number(ev.status)).to.deep.equal(20);
             });
 
+            //verify processFlightStatus changes: creditInsurees and flightStatus 
+            const customerOneBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            const customerTwoBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[21], {from: owner});
+            const customerThreeBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[22], {from: owner});
+            const customerfourBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[23], {from: owner});
+            const airlineBalanceAfter = await dataContract.getBalanceOfAirline(owner, {from: owner});
+            expect(Number(customerOneBalanceAfter)).to.equal(Number(oneAndAHalfEther)); // 1 x 1.5
+            expect(Number(customerTwoBalanceAfter)).to.equal(Number(oneAndAHalfEther));
+            expect(Number(customerThreeBalanceAfter)).to.equal(Number(oneAndAHalfEther));
+            expect(Number(customerfourBalanceAfter)).to.equal(Number(oneAndAHalfEther));
+            expect(Number(airlineBalanceAfter)).to.equal(Number(eightEther)); // 14 - (4 x 1.5)
         });
         
-        it('should NOT allow to submitOracleResponse if the flight is already resolved/processed', async() => {});
+        it('should NOT allow to submitOracleResponse if the flight is already resolved/processed', async() => {
+            if(matchingIndexOracles.length < 4){
+                assert.fail(`Test failed as less than 4 oracles have the correct index of ${chosenIndex}`);
+            }
+            await expectToRevert(contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[3]}), 
+                                'Flight or timestamp do not match oracle request');
+        });
+
+        it('should NOT allow to fetchFlightStatus if 3 x submitOracleResponse[20] has resolved/processed the flight', async() => {
+            await expectToRevert(contractInstance.fetchFlightStatus(flightNumberOne, {from: owner}), 'Flight status already fetched');
+        });
+
+        it('should NOT creditInsurees IF processFlightStatus is triggered by other response than 20', async() =>{
+            //register a 2nd flight and buy 2 insurances
+            await contractInstance.registerFlight(flightNumberTwo, timestamp, {from: owner});
+            await contractInstance.buyInsurance(flightNumberTwo, {from: accounts[20], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberTwo, {from: accounts[21], value: oneEther});
+            const customerOneBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            const airlineBalanceBefore = await dataContract.getBalanceOfAirline(owner, {from: owner});
+            expect(Number(customerOneBalanceBefore)).to.equal(Number(oneAndAHalfEther));
+            expect(Number(airlineBalanceBefore)).to.equal(Number(tenEther)); // 8 (from prev) + 2 new bought insurances
+
+            // trigger fetchFlightStatus and submit 3 responses of 10 to prove the clients don't get credited
+            let tx = await contractInstance.fetchFlightStatus(flightNumberTwo, {from: owner});
+            truffleAssert.eventEmitted(tx, 'OracleRequest', (ev) => {
+                chosenIndex = Number(ev.index);
+                return true;
+            });
+            getMatchingOracles(chosenIndex);
+            if(matchingIndexOracles.length < 3){
+                assert.fail(`Test failed as less than 3 oracles have the correct index of ${chosenIndex}`);
+            }
+            await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberTwo, timestamp, 10, {from: matchingIndexOracles[0]});
+            await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberTwo, timestamp, 10, {from: matchingIndexOracles[1]});
+            tx = await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberTwo, timestamp, 10, {from: matchingIndexOracles[2]});
+            
+            // assert FlightStatusInfo doesn't credit the insurees and doesn't lock the flight (resolved status of 10 not 20)
+            truffleAssert.eventEmitted(tx, 'FlightStatusInfo', (ev) => {
+                return expect(ev.airline).to.deep.equal(owner) 
+                       && expect(web3.utils.hexToUtf8(ev.flightNumber)).to.equal('LT3224')
+                       && expect(Number(ev.timestamp)).to.deep.equal(timestamp)
+                       && expect(Number(ev.status)).to.deep.equal(10);
+            });
+            const customerOneBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            const customerTwoBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[21], {from: owner});
+            const airlineBalanceAfter = await dataContract.getBalanceOfAirline(owner, {from: owner});
+            expect(Number(customerOneBalanceAfter)).to.equal(Number(oneAndAHalfEther)); // 1 x 1.5
+            expect(Number(customerTwoBalanceAfter)).to.equal(Number(oneAndAHalfEther));
+            expect(Number(airlineBalanceAfter)).to.equal(Number(tenEther)); // 10 as before hence flight is not delayed
+
+            // assert Oracles still can submit OracleReports as flight is not locked
+            tx = await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberTwo, timestamp, 20, {from: matchingIndexOracles[3]});
+            truffleAssert.eventEmitted(tx, 'OracleReport', (ev) => {
+                return expect(ev.airline).to.deep.equal(owner) 
+                       && expect(web3.utils.hexToUtf8(ev.flightNumber)).to.equal('LT3224')
+                       && expect(Number(ev.timestamp)).to.deep.equal(timestamp)
+                       && expect(Number(ev.status)).to.deep.equal(20);
+            });
+        });
 
         it('should NOT allow to submitOracleResponse if contract is paused', async() => {
             await contractInstance.setOperatingStatus(false, {from: owner});
@@ -565,11 +648,86 @@ contract('FlightSuretyApp', accounts => {
         });
 
         const getMatchingOracles = (desiredIndex) => {
+            matchingIndexOracles = [];
             for (let [address, indexes] of oracles) {
                 indexes.forEach(index => {
                     if (index == desiredIndex){
                         matchingIndexOracles.push(address);
-                        console.log(desiredIndex + '->' + address);
+                        //console.log(desiredIndex + '->' + address);
+                    }
+                });
+            }
+        }
+    });
+
+    describe('Test suite: withdraw', () => {
+        let chosenIndex;
+        let minFee;
+        let timestamp = 1122334455;
+        let oracles = new Map();
+        let matchingIndexOracles = [];
+        //does a whole chain of processes to register a flight, fetchFlightStatus, submitOracles and creditInsurees
+        before(async() => {
+            dataContract = await dataContractDefinition.new(web3.utils.utf8ToHex(firstAirline), {from:owner});
+            contractInstance = await appContractDefinition.new(dataContract.address, {from:owner});
+            await dataContract.authorizeContract(contractInstance.address, {from: owner});
+            await dataContract.authorizeContract(owner, {from: owner});
+            await contractInstance.fundAirline({from: owner, value: tenEther});
+            await contractInstance.registerFlight(flightNumberOne, timestamp, {from: owner});
+            let tx = await contractInstance.fetchFlightStatus(flightNumberOne, {from: owner});
+            truffleAssert.eventEmitted(tx, 'OracleRequest', (ev) => {
+                chosenIndex = Number(ev.index);
+                return true;
+            });
+
+            minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
+
+            for (let i=1; i <= 19; i++) {
+                await contractInstance.registerOracle({from: accounts[i], value: minFee});
+                let indexes = await contractInstance.getMyIndexes.call({from: accounts[i]});
+                oracles.set(accounts[i], [Number(indexes[0]), Number(indexes[1]), Number(indexes[2])]); 
+            }
+            getMatchingOracles(chosenIndex);
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[20], value: oneEther});
+            await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[0]});
+            await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[1]});
+            await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[2]});
+        });
+
+        it('should NOT allow to withdraw if desired amount it higher than customer\'s actual balance', async() => {
+            await expectToRevert(contractInstance.withdraw(twoEther, {from: accounts[20]}), 'The desired amount exceedes insuree balance');
+        });
+
+        it('should allow a customer to withdraw the desired amount, deduct from the data contract account balance and transfer to client account', async() => {
+            let customerWalletBalanceBefore = await web3.eth.getBalance(accounts[20]);
+            let customerContractBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            let dataContractBalanceBefore = await web3.eth.getBalance(dataContract.address);
+            await contractInstance.withdraw(oneEther, {from: accounts[20]});
+
+            let customerWalletBalanceAfter = await web3.eth.getBalance(accounts[20]);
+            let customerContractBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            let dataContractBalanceAfter = await web3.eth.getBalance(dataContract.address);
+
+            expect(Number(customerContractBalanceBefore)).to.equal(Number(oneAndAHalfEther));
+            expect(Number(customerContractBalanceAfter)).to.equal(Number(web3.utils.toWei('0.5', 'ether')));
+            const maxGasDifference = web3.utils.toWei('0.8', 'ether');
+            expect(Number(customerWalletBalanceAfter) - Number(customerWalletBalanceBefore)).to.be.within(Number(maxGasDifference), Number(oneEther));
+            expect(Number(dataContractBalanceBefore) - Number(dataContractBalanceAfter)).to.equal(Number(oneEther));
+
+        });    
+
+        it('should NOT allow to withdraw if contract is paused', async() => {
+            await contractInstance.setOperatingStatus(false, {from: owner});
+            await expectToRevert(contractInstance.withdraw(oneEther, {from: accounts[20]}), 'Contract is currently not operational');
+        });
+
+        const getMatchingOracles = (desiredIndex) => {
+            matchingIndexOracles = [];
+            for (let [address, indexes] of oracles) {
+                indexes.forEach(index => {
+                    if (index == desiredIndex){
+                        matchingIndexOracles.push(address);
+                        //console.log(desiredIndex + '->' + address);
                     }
                 });
             }

@@ -21,7 +21,7 @@ contract FlightSuretyApp {
     uint256 private MAX_INSURANCE =  1 ether; 
     uint256 private CONSENSUS = 4; //max number of airlines without consensus rule
     uint256 private CONSENSUS_RULE = 5; // percentage of airlines to vote for consensus
-
+    uint8 private INSURANCE_MULTIPLIER = 5;
     address private contractOwner;          // Account used to deploy contract
     bool private operational = true; 
     FlightSuretyData data; //data contract
@@ -212,16 +212,23 @@ contract FlightSuretyApp {
      * For exercise purpose, only status 20 will be considered and taken action upon
      */  
     function processFlightStatus(
+        bytes32 oracleRequestKey,
         address airline, 
         bytes32 flightNumber, 
         uint256 timestamp, 
         uint8 statusCode
     )
-       internal
-       pure
+       private
     {
         if(statusCode == STATUS_CODE_LATE_AIRLINE){
-            //logic here
+            bytes32 flightKey = getFlightKey(airline, flightNumber, timestamp);
+            uint256 airlineBalance = data.getBalanceOfAirline(airline);
+            uint256 boughtInsurance = data.getEstimativeCreditingCost(flightKey);
+            uint8 multiplier = getInsuranceMultiplier(airlineBalance, boughtInsurance);
+            
+            data.creditInsurees(flightKey, multiplier);
+            data.setFlightStatus(flightKey, STATUS_CODE_LATE_AIRLINE);
+            oracleResponses[oracleRequestKey].isOpen = false;
         }
     }
 
@@ -247,6 +254,10 @@ contract FlightSuretyApp {
         // The index 0-9 will tell them if they should bother with the info or not
         emit OracleRequest(index, airline, flightNumber, timestamp);
     } 
+
+    function withdraw(uint256 amount) external isOperational {
+        data.pay(msg.sender, amount);
+    }
 
     function voteIfHasNotVoted(address voter, address _newAirline) private {
         bool hasVoted = false; 
@@ -288,6 +299,18 @@ contract FlightSuretyApp {
         return keccak256(abi.encodePacked(_address, key, value));
     }
 
+    function getInsuranceMultiplier(uint256 airlineBalance, uint256 boughtInsurance) 
+        private 
+        returns(uint8)
+    {
+        uint8 multiplier = INSURANCE_MULTIPLIER;
+        uint256 maxCredit = boughtInsurance.mul(multiplier).div(10);
+        while(airlineBalance <= maxCredit && multiplier > 0){
+            multiplier--;
+            maxCredit = boughtInsurance.mul(multiplier).div(10);
+        }
+        return multiplier;
+    }
 
 // region ORACLE MANAGEMENT
 
@@ -374,7 +397,7 @@ contract FlightSuretyApp {
             emit FlightStatusInfo(airline, flight, timestamp, statusCode);
 
             // Handle flight status as appropriate. 
-            processFlightStatus(airline, flight, timestamp, statusCode);
+            processFlightStatus(key, airline, flight, timestamp, statusCode);
         }
     }
 
@@ -411,7 +434,7 @@ contract FlightSuretyApp {
         uint8 maxValue = 10;
 
         // Pseudo random number...the incrementing nonce adds variation
-        uint8 random = uint8(uint256(keccak256(abi.encodePacked(blockhash(block.number - nonce++), account))) % maxValue);
+        uint8 random = uint8(uint256(keccak256(abi.encodePacked(blockhash(block.number - ++nonce), account))) % maxValue);
 
         if (nonce > 250) {
             nonce = 0;  // Can only fetch blockhashes for last 256 blocks so we adapt
@@ -453,4 +476,9 @@ contract FlightSuretyData {
     function getAllFlights() external view returns(bytes32[] memory);
     function getInsuranceDetails(bytes32 insuranceKey) external view returns(address, uint256, bool);
     function buyInsurance(bytes32 flightKey, address _insuree, uint256 amount) external;
+    function getBalanceOfAirline(address _airline) external view returns(uint256);
+    function getEstimativeCreditingCost(bytes32 flightKey) external view returns(uint256);
+    function setFlightStatus(bytes32 flightKey, uint8 _statusCode) external;
+    function creditInsurees(bytes32 flightKey, uint8 delta) external;
+    function pay(address _insuree, uint256 amount) external;
 }
