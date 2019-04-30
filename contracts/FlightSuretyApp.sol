@@ -301,6 +301,7 @@ contract FlightSuretyApp {
 
     function getInsuranceMultiplier(uint256 airlineBalance, uint256 boughtInsurance) 
         private 
+        view
         returns(uint8)
     {
         uint8 multiplier = INSURANCE_MULTIPLIER;
@@ -446,7 +447,7 @@ contract FlightSuretyApp {
     /**
      * @dev Only checks if this oracle has already replied 20 (delayed) as 20 is scope of exercise
      */
-    function hasOracleAlreadyResponded(bytes32 key) private returns(bool) {
+    function hasOracleAlreadyResponded(bytes32 key) private view returns(bool) {
         bool hasResponded = false;
         for(uint i = 0; i < oracleResponses[key].responses[STATUS_CODE_LATE_AIRLINE].length; i++){
             if(oracleResponses[key].responses[STATUS_CODE_LATE_AIRLINE][i] == msg.sender){
