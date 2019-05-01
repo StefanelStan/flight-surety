@@ -4,39 +4,39 @@ import Web3 from 'web3';
 
 export default class Contract {
     constructor(network, callback) {
-
         let config = Config[network];
+        console.log(config);
         this.web3 = new Web3(new Web3.providers.HttpProvider(config.url));
         this.flightSuretyApp = new this.web3.eth.Contract(FlightSuretyApp.abi, config.appAddress);
         this.initialize(callback);
         this.owner = null;
         this.airlines = [];
         this.passengers = [];
+		this.accounts = [];
     }
 
     initialize(callback) {
         this.web3.eth.getAccounts((error, accts) => {
-           
-            this.owner = accts[0];
+			
+				this.owner = accts[0];
 
-            let counter = 1;
-            
-            while(this.airlines.length < 5) {
-                this.airlines.push(accts[counter++]);
-            }
+				let counter = 1;
+				
+				while(this.airlines.length < 5) {
+					this.airlines.push(accts[counter++]);
+				}
 
-            while(this.passengers.length < 5) {
-                this.passengers.push(accts[counter++]);
-            }
+				while(this.passengers.length < 5) {
+					this.passengers.push(accts[counter++]);
+				}
 
-            callback();
+				callback();
+		
         });
     }
 
     isOperational(callback) {
-       let self = this;
-       self.flightSuretyApp.methods
-            .isOperational()
+       this.flightSuretyApp.methods.isContractOperational
             .call({ from: self.owner}, callback);
     }
 
