@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Surety Project</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <!-- loading the minified version -->
+    <script src="https://unpkg.com/ipfs-api@9.0.0/dist/index.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1 style="text-align: center;">Flight Surety</h1>
+        <hr>
+        <p style="text-align: center;">Helping you to get the flight insurance you deserve.</p>
+    </div>
+
+    <div id="ftc-harvest">
+        
+        <div class="form-group">
+        <h2>Contract Administration (owner/admin)</h2>
+            Data Contract Address:
+            <input type="text" id="appAddress" name="appAddress" value="0x0000000000000000000000000000000000000000" size="50" disabled="true"><br><br>
+            <!-- <input class="input-field" type="number" id="sku" name="sku" value="0"><br> -->
+            App Contract Operational Status
+            <br>
+            <div class="button-div">
+                <input type="radio" id="appStatus_radio_2" name="appContractStatus" value="operational"/>
+                <label for="appStatus_radio_2">Operational</label>
+                <input type="radio" id="appStatus_radio_1" name="appContractStatus" value="notoperational"/> 
+                <label for="appStatus_radio_1">Not Operational</label>
+           </div>
+           <br>
+            Data Contract Operational Status
+            <br>
+            <div class="button-div">
+                <input type="radio" id="dataStatus_radio_2" name="dataContractStatus" value="operational"/>
+                <label for="dataStatus_radio_2">Operational</label>
+                <input type="radio" id="dataStatus_radio_1" name="dataContractStatus" value="notoperational"/> 
+                <label for="dataStatus_radio_1">Not Operational</label>
+           </div>
+           Data Contract Address:
+            <input type="text" id="appAddress2" name="appAddress" value="0x0000000000000000000000000000000000000000" size="50"><br><br>
+           <div class="button-div">
+                <button class="btn-fetchOne" type="button" data-id="0">Get AppContract Address</button>
+                <button class="btn-fetchOne" type="button" data-id="1">Get AppContract Status</button>
+                <button class="btn-fetchTwo" type="button" data-id="2">Set AppContract Status</button>
+                <button class="btn-fetchOne" type="button" data-id="3">Get DataContract Status</button>
+                <button class="btn-fetchTwo" type="button" data-id="4">Set DataContract Status</button>
+                <button class="btn-fetchTwo" type="button" data-id="5">Authorize AppContract to DataContract</button>
+            </div>
+        </div>
+        <div class="form-break"></div>
+        <br>
+        <div class="form-group">
+            <h2>Airline</h2>
+            <h2> Register or vote new Airline </h2>
+            Airline Address
+            <br>
+            <input type="text" id="newAirlineAddress" value="0x0000000000000000000000000000000000000000" size="50"><br>
+            Airline Name
+            <br>
+            <input type="text" id="newAirlineName" placeholder="Insert airline name here"><br>
+            <h2>Fund Airline </h2>
+            <input type="number" id="fundAirlineFee" value="10">ETH<br>
+            <h2> Register new flight </h2>
+            Flight Number
+            <br>
+            <input type="text" id="newFlightNumber" placeholder="Insert flight number here (eg: LT3214)"><br>
+            Flight time
+            <br>
+            <input type="text" id="newFlightTimestamp" value="1557002775"><br>
+            <button class="btn-mine" type="button" data-id="6">Register/Vote Airline</button>
+            <button class="btn-mine" type="button" data-id="7">Fund Airline</button>
+            <button class="btn-mine" type="button" data-id="8">Register new Flight</button>
+        </div>
+        <div class="form-break"></div>
+        <br>
+        <div class="form-group">
+        <h2>Product Details</h2>
+            Item Price
+            <br>
+            <input type="number" id="itemPrice" name="itemPrice" value="1">ETH<br>
+            Manufacturer ID
+            <br>
+            <input type="text" id="manufacturer" name="manufacturer" disabled="true" value="0x0000000000000000000000000000000000000000"
+                size="50"><br>
+            Masterjeweler ID
+            <br>
+            <input type="text" id="masterjeweler" name="masterjeweler" value="0x0000000000000000000000000000000000000000"
+                size="50"><br>
+            Product Price
+            <br>
+            <input type="number" id="productPrice" name="productPrice" value="2">ETH<br>     
+            Retailer ID
+            <br>
+            <input type="text" id="retailer" name="retailer" value="0x0000000000000000000000000000000000000000"
+                size="50"><br>
+            Customer ID
+            <br>
+            <input type="text" id="customer" name="customer" disabled="true" value="0x0000000000000000000000000000000000000000"
+                size="50"><br>
+            <br>
+            <button class="btn-markForPurchase" type="button" data-id="11">11.MarkForPurchasing</button>
+            <button class="btn-sendForPurchase" type="button" data-id="12">12.SendForPurchasing</button>
+            <button class="btn-receiveForPurchase" type="button" data-id="13">13.ReceiveForPurchasing</button>
+            <button class="btn-PutUpForPurchase" type="button" data-id="14">14.PutUpForPurchasing</button>
+            <button class="btn-purchase" type="button" data-id="15">15.Purchase</button>
+            <button class="btn-fetch" type="button" data-id="16">16.Fetch</button>
+        </div>
+        <div class="form-break"></div>
+        <hr>
+    </div>
+    <div class="form-group">
+        <h2>Transaction History<span id="ftc-history"></span></h2>
+        <div>
+            <ul id="ftc-events">
+                <!-- Events will appear here from app.js -->
+            </ul>
+            <br>
+            <hr>
+        </div>
+    </div>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <!-- <script src="js/web3.min.js"></script> -->
+    <script src="dapp/js/truffle-contract.js"></script>
+    <script src="dapp/js/app.js"></script>
+    <script type="text/javascript">
+        function uploadToIpfs(){
+            const reader = new FileReader();
+            $('.loading-overlay').show();
+            reader.onloadend = async () => {
+                const myipfs = window.IpfsApi({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' });
+                let content = myipfs.Buffer(reader.result);
+                let result = myipfs.files.add(content, async (err, result) => {
+                    if(err) {
+                        console.error(err);
+                        $('.loading-overlay').hide();
+                        return;
+                    }
+                    await App.uploadHash(result[0].hash);
+                    console.log(`https://ipfs.io/ipfs/${result[0].hash}`);
+                    document.getElementById('selectedIpfsFile').value = result[0].hash;
+                    $('.loading-overlay').hide();
+                    return;
+                });
+            }
+
+            const photo = document.getElementById("file-input");
+            reader.readAsArrayBuffer(photo.files[0]);
+        }
+    </script>
+</body>
+
+</html>
