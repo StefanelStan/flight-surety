@@ -63,13 +63,13 @@
             <input type="text" id="newAirlineAddress" value="0x0000000000000000000000000000000000000000" size="50"><br>
             Airline Name
             <br>
-            <input type="text" id="newAirlineName" placeholder="Insert airline name here"><br>
+            <input type="text" id="newAirlineName" placeholder="Insert airline name"><br>
             <h2>Fund Airline </h2>
             <input type="number" id="fundAirlineFee" value="10">ETH<br>
             <h2> Register new flight </h2>
             Flight Number
             <br>
-            <input type="text" id="newFlightNumber" placeholder="Insert flight number here (eg: LT3214)"><br>
+            <input type="text" id="newFlightNumber" placeholder="Insert flight number (eg: LT3214)"><br>
             Flight time
             <br>
             <input type="text" id="newFlightTimestamp" value="1557002775"><br>
@@ -80,41 +80,57 @@
         <div class="form-break"></div>
         <br>
         <div class="form-group">
-        <h2>Product Details</h2>
-            Item Price
+        <h2>Passenger - buy insurance</h2>
+            Select Flight
             <br>
-            <input type="number" id="itemPrice" name="itemPrice" value="1">ETH<br>
-            Manufacturer ID
+            <select id="flights">
+            </select>
             <br>
-            <input type="text" id="manufacturer" name="manufacturer" disabled="true" value="0x0000000000000000000000000000000000000000"
-                size="50"><br>
-            Masterjeweler ID
+            Flight Company Address
             <br>
-            <input type="text" id="masterjeweler" name="masterjeweler" value="0x0000000000000000000000000000000000000000"
-                size="50"><br>
-            Product Price
+            <input type="text" id="flightCompany" disabled="true" value="" size="50"><br>
+            Flight time
             <br>
-            <input type="number" id="productPrice" name="productPrice" value="2">ETH<br>     
-            Retailer ID
+            <input type="text" id="flightTimestamp" disabled="true" value="" size="50"><br>
+            Flight status
             <br>
-            <input type="text" id="retailer" name="retailer" value="0x0000000000000000000000000000000000000000"
-                size="50"><br>
-            Customer ID
+            <input type="text" id="flightStatus" disabled="true" value="" size="50"><br>
+            Insurance amount (max 1 ether or 1000 finney/miliether)
             <br>
-            <input type="text" id="customer" name="customer" disabled="true" value="0x0000000000000000000000000000000000000000"
-                size="50"><br>
+            <input type="number" id="insuranceAmount" name="itemPrice" value="500">Finney<br>
             <br>
-            <button class="btn-markForPurchase" type="button" data-id="11">11.MarkForPurchasing</button>
-            <button class="btn-sendForPurchase" type="button" data-id="12">12.SendForPurchasing</button>
-            <button class="btn-receiveForPurchase" type="button" data-id="13">13.ReceiveForPurchasing</button>
-            <button class="btn-PutUpForPurchase" type="button" data-id="14">14.PutUpForPurchasing</button>
-            <button class="btn-purchase" type="button" data-id="15">15.Purchase</button>
-            <button class="btn-fetch" type="button" data-id="16">16.Fetch</button>
+            <button class="btn-markForPurchase" type="button" data-id="9">Get Flights</button>
+            <button class="btn-sendForPurchase" type="button" data-id="10">Buy insurance</button>
         </div>
         <div class="form-break"></div>
-        <hr>
+        <br>
+        <div class="form-group">
+        <h2>Oracles and payout insurance</h2>
+            Select Flight
+            <br>
+            <select id="flightsOracles">
+            </select>
+            <br>
+            Flight Company Address
+            <br>
+            <input type="text" id="flightCompanyOracles" disabled="true" value="" size="50"><br>
+            Flight time
+            <br>
+            <input type="text" id="flightTimestampOracles" disabled="true" value="" size="50"><br>
+            Flight status
+            <br>
+            <input type="text" id="flightStatusOracles" disabled="true" value="" size="50"><br>
+            Amount to withdraw (max available)
+            <br>
+            <input type="number" id="insuranceAmountToWithdraw" name="itemPrice" value="0">Finney<br>
+            <br>
+            <button class="btn-markForPurchase" type="button" data-id="11">Check Flight Status</button>
+            <button class="btn-sendForPurchase" type="button" data-id="12">Withdraw</button>
+        </div>
+        <div class="form-break"></div>
+
     </div>
-    <div class="form-group">
+    <div class="container">
         <h2>Transaction History<span id="ftc-history"></span></h2>
         <div>
             <ul id="ftc-events">
@@ -128,31 +144,7 @@
     <!-- <script src="js/web3.min.js"></script> -->
     <script src="dapp/js/truffle-contract.js"></script>
     <script src="dapp/js/app.js"></script>
-    <script type="text/javascript">
-        function uploadToIpfs(){
-            const reader = new FileReader();
-            $('.loading-overlay').show();
-            reader.onloadend = async () => {
-                const myipfs = window.IpfsApi({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' });
-                let content = myipfs.Buffer(reader.result);
-                let result = myipfs.files.add(content, async (err, result) => {
-                    if(err) {
-                        console.error(err);
-                        $('.loading-overlay').hide();
-                        return;
-                    }
-                    await App.uploadHash(result[0].hash);
-                    console.log(`https://ipfs.io/ipfs/${result[0].hash}`);
-                    document.getElementById('selectedIpfsFile').value = result[0].hash;
-                    $('.loading-overlay').hide();
-                    return;
-                });
-            }
-
-            const photo = document.getElementById("file-input");
-            reader.readAsArrayBuffer(photo.files[0]);
-        }
-    </script>
+    
 </body>
 
 </html>

@@ -1,8 +1,8 @@
-import FlightSuretyApp from '../../build/contracts/FlightSuretyApp.json';
-import FlightSuretyData from '../../build/contracts/FlightSuretyData.json';
-import Config from './config.json';
-import Web3 from 'web3';
-import express from 'express';
+const FlightSuretyApp = require('../../build/contracts/FlightSuretyApp.json');
+const FlightSuretyData = require('../../build/contracts/FlightSuretyData.json');
+const Config = require('./config.json');
+const Web3 = require('web3');
+const express = require('express');
 
 
 let config = Config['localhost'];
@@ -12,15 +12,6 @@ let flightSuretyApp = new web3.eth.Contract(FlightSuretyApp.abi, config.appAddre
 let flightSuretyData = new web3.eth.Contract(FlightSuretyData.abi, config.dataAddress);
 const oracles = new Map();
 let accounts = [];
-let flightNumber = web3.utils.fromAscii('LT3214');
-// const registerInitialOracles = async() => {
-//     let accounts = await web3.eth.getAccounts();
-//     for (let i=5; i < 25; i++){
-//         console.log(`Registering oracle ${accounts[i]}`);
-//         let result = await flightSuretyApp.methods.registerOracle({from: accounts[i], value: web3.utils.toWei('1', 'ether'), gas: 250000}); 
-//         console.log(result);
-//     }
-// };
 
 const registerInitialOracles = async () => {
     try {
@@ -33,24 +24,63 @@ const registerInitialOracles = async () => {
             oracles.set(accounts[i], indexes);
             console.log(`Oracle number ${i - 5} - ${accounts[i]} has indexes =  ${indexes}`);
         }
-        await authorizeAppContract();
-        await fundAirline();
-        await registerFlight();
-        await fetchFlightStatus(); 
+        // await authorizeAppContract();
+        // await fundAirline();
+        // await registerFlight();
+        // await fetchFlightStatus(); 
     } catch (error){
-        console.log('Unable to registerInitialOracles because' + error.message);
+        console.log('Unable to register all 20 initial oracles. (Maybe oracle already exists?)');
     };
 };
 
-const submitOracleResponses = async(event) =>{
-    try {
-        const oraclesByIndex = getOraclesByIndex(event.returnValues.index);
-        oraclesByIndex.forEach(async(oracleAddress) => {
-            await submitOracleResponse(oracleAddress, event.returnValues.index, event.returnValues.airline, event.returnValues.flightNumber, event.returnValues.timestamp);
+const getAccounts = () => {
+    return new Promise((resolve, reject) => {
+        web3.eth.getAccounts((error, result) => {
+            if (error) {
+                console.error('Error encountered while getting accounts');
+                reject(error);
+            } else {
+              resolve(result);
+            }
+        });        
+    });        
+};
+
+const registerOracle = (address) => {
+    return new Promise((resolve, reject) => {
+        flightSuretyApp.methods.registerOracle.send({from: address, value: web3.utils.toWei('1', 'ether'), gas: 3000000}, (error, result) => {
+            if (error) {
+                console.error('Error encountered while registering oracle  '+ address);
+                reject(error)
+            } else {
+                resolve(result)
+            }
         });
-    } catch(error){
-        console.log('Unable to submitOracleResponses due to ' + error.message);
-    }    
+    });
+};
+
+const getOracleIndexes = (address) => {
+    return new Promise((resolve, reject) => {
+        flightSuretyApp.methods.getMyIndexes.call({from: address, gas: 500000}, (error, result) => {
+            if(!error){
+                resolve(result);
+            } else {
+                console.log('Error encountered while getOracleIndexes for   '+ address + 'because ' + error.message);
+                reject(error);
+            }    
+        });
+    });
+};
+
+const submitOracleResponses = async(event) =>{
+    const oraclesByIndex = getOraclesByIndex(event.returnValues.index);
+    oraclesByIndex.forEach(async(oracleAddress) => {
+        try {
+            await submitOracleResponse(oracleAddress, event.returnValues.index, event.returnValues.airline, event.returnValues.flightNumber, event.returnValues.timestamp);
+        } catch(error){
+            console.log('Unable to submitOracleResponse for Oracle Address ' + oracleAddress);
+        }    
+    });
 };
 
 const getOraclesByIndex = (desiredIndex) => {
@@ -64,6 +94,30 @@ const getOraclesByIndex = (desiredIndex) => {
         });
     }
     return matchingOracles;
+};
+
+const submitOracleResponse = (oracleAddress, index, airline, flightNumber, timestamp) => {
+    return new Promise((resolve, reject) => {
+        let statusCode = gerRandomFlightStatusCode();
+        console.log(`Oracle ${oracleAddress} is submitting flight status code of ${statusCode}`);
+        flightSuretyApp.methods.submitOracleResponse(index, airline, flightNumber, timestamp, statusCode)
+            .send({from: oracleAddress, gas: 500000}, 
+                (error, result) => {
+                    if(!error)
+                        resolve(result);
+                    else {
+                        console.log(`oracle ${oracleAddress} was rejected while submitting oracle response with status statusCode ${statusCode}`);
+                        reject(error);
+                    }                
+            });
+    });
+};
+
+const gerRandomFlightStatusCode = () =>{
+    let index = Math.floor(Math.random() * Math.floor(10));
+    if (index <= 7)
+        return 20;
+    return index+1;    
 };
 
 const authorizeAppContract = () =>{
@@ -122,70 +176,6 @@ const fetchFlightStatus = () =>{
     });
 };
 
-
-const submitOracleResponse = (address, index, airline, flightNumber, timestamp) => {
-    return new Promise((resolve, reject) => {
-        let status = getRandomStatusCode();
-        flightSuretyApp.methods.submitOracleResponse(index, airline, flightNumber, timestamp, status)
-            .send({from: address, gas: 500000}, 
-                (error, result) => {
-                    if(!error)
-                        resolve(result);
-                    else {
-                        console.log('Unable to submit oracle response because ' + error.message);
-                        reject(error);
-                    }                
-            });
-    });
-};
-
-const getAccounts = () => {
-    return new Promise((resolve, reject) => {
-        web3.eth.getAccounts((error, result) => {
-            if (error) {
-                console.error('Error encountered while getting accounts');
-                reject(error);
-            } else {
-              resolve(result);
-            }
-        });        
-    });        
-};
-
-const getRandomStatusCode = () =>{
-    let index = Math.floor(Math.random() * Math.floor(10));
-    if (index < 5)
-        return 20;
-    return index+1;    
-};
-
-const registerOracle = (address) => {
-    return new Promise((resolve, reject) => {
-        flightSuretyApp.methods.registerOracle.send({from: address, value: web3.utils.toWei('1', 'ether'), gas: 3000000}, (error, result) => {
-            if (error) {
-                console.error('Error encountered while registering oracle  '+ address + 'because ' + error);
-                reject(error)
-            } else {
-                resolve(result)
-            }
-       
-        });
-    });
-};
-
-const getOracleIndexes = (address) => {
-    return new Promise((resolve, reject) => {
-        flightSuretyApp.methods.getMyIndexes.call({from: address, gas: 500000}, (error, result) => {
-            if(!error){
-                resolve(result);
-            } else {
-                console.log('Error encountered while getOracleIndexes for   '+ address + 'because ' + error.message);
-                reject(error);
-            }    
-        });
-    });
-};
-
 flightSuretyApp.events.OracleRequest({fromBlock: 0}, (error, event) => {
     if (error) 
         console.log(error);
@@ -205,8 +195,14 @@ flightSuretyApp.events.OracleReport({fromBlock: 0}, (error, event) => {
 flightSuretyApp.events.FlightStatusInfo({fromBlock: 0}, (error, event) => {
     if (error) 
         console.log(error);
-    else    
-        console.log(event);
+    else {
+        console.log(`${event.event} Received with attributes : 
+            airline ${event.returnValues.airline} 
+            flightNumber ${web3.utils.toUtf8(event.returnValues.flightNumber)} 
+            timeStamp ${Number(event.returnValues.timestamp)} 
+            statusCode : ${event.returnValues.status}
+        `);    
+    }
 });
 
 const app = express();
@@ -218,6 +214,8 @@ app.get('/api', (req, res) => {
 
 registerInitialOracles();
 
-export default app;
+module.export = { 
+    app
+}
 
 

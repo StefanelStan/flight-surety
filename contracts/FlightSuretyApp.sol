@@ -259,6 +259,11 @@ contract FlightSuretyApp {
         data.pay(msg.sender, amount);
     }
 
+    function getBalanceOfInsuree() external view isOperational returns(uint256){
+        uint256 balance = data.getBalanceOfInsuree(msg.sender);
+        return balance;
+    }
+
     function voteIfHasNotVoted(address voter, address _newAirline) private {
         bool hasVoted = false; 
         for (uint i=0; i< airlineVotes[_newAirline].length; i++){
@@ -482,4 +487,5 @@ contract FlightSuretyData {
     function setFlightStatus(bytes32 flightKey, uint8 _statusCode) external;
     function creditInsurees(bytes32 flightKey, uint8 delta) external;
     function pay(address _insuree, uint256 amount) external;
+    function getBalanceOfInsuree(address _insuree) external view returns(uint256);
 }

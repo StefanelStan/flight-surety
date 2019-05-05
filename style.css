@@ -16,6 +16,7 @@ body {
   margin: 0 auto;
 position: center;
 background-color:#000000;
+opacity:0.8;
 }
 
 
@@ -27,6 +28,29 @@ input {
     width: 80%;
     padding: 12px 20px;
     margin: 10px 0;
+}
+
+select{
+    width: 86%;
+    padding: 12px 20px;
+    margin: 10px 0;
+}
+
+options {
+    display:none;
+    position:absolute;
+    top:100%;
+    right:0;
+    left:0;
+    z-index:999;
+    margin:0 0;
+    padding:0 0;
+    list-style:none;
+    border:1px solid #ccc;
+    background-color:white;
+    -webkit-box-shadow:0 1px 2px rgba(0, 0, 0, 0.2);
+    -moz-box-shadow:0 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow:0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 input[type="radio"] {
@@ -63,38 +87,15 @@ button {
   width:50%;
   padding:30px;
   border-radius: 4px;
-  background-color:#000000;
+background: rgb(75,46,59);
+background: linear-gradient(12deg, rgba(75,46,59,0.87156869583771) 20%, rgba(24,24,37,1) 55%, rgba(255,175,0,1) 100%);
   margin: 0 auto;
+  opacity:0.8;
 }
 
 	
 .horizontal-rule {
   background-color:#BDBDBD;
-}
-#myDiv {
-  position: relative;
-  background-color: #C0DBF0;
-  width: 400px;
-  padding: 20px;
-}
-
-.loading-overlay {
-  display: none;
-text-align: center;
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: #fff;
-  opacity: 0.6;
-}
-
-.spin-loader {
-  height: 100px;
-  background: url("http://i62.tinypic.com/2hzsro.gif") no-repeat center center transparent;
-  position: relative;
-  top: 25%;
 }
 
 #button {

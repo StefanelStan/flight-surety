@@ -1,61 +1,9 @@
 App = {
     web3Provider: null,
     contracts: {},
-    emptyAddress: "0x0000000000000000000000000000000000000000",
-    sku: 0,
-    upc: 0,
-    metamaskAccountID: "0x0000000000000000000000000000000000000000",
-    ownerID: "0x0000000000000000000000000000000000000000",
-    miner: "0x0000000000000000000000000000000000000000",
-    minerName: null,
-    mineInformation: null,
-    mineLatitude: null,
-    mineLongitude: null,
-    itemNotes: null,
-    itemPrice: 0,
-    productPrice: 0,
-    manufacturer: "0x0000000000000000000000000000000000000000",
-    retailer: "0x0000000000000000000000000000000000000000",
-    customer: "0x0000000000000000000000000000000000000000",
-
+    
     init: async () => {
-        App.readForm();
         return await App.initWeb3();
-        /// Setup access to blockchain
-    },
-
-    readForm: function () {
-        App.sku = $("#sku").val();
-        App.upc = $("#upc").val();
-        App.ownerID = $("#ownerID").val();
-        App.miner = $("#miner").val();
-        App.minerName = $("#minerName").val();
-        App.mineInformation = $("#mineInformation").val();
-        App.mineLatitude = $("#mineLatitude").val();
-        App.mineLongitude = $("#mineLongitude").val();
-        App.itemNotes = $("#itemNotes").val();
-        App.itemPrice = $("#itemPrice").val();
-        App.productPrice = $("#productPrice").val();
-        App.manufacturer = $("#manufacturer").val();
-        App.masterjeweler = $("#masterjeweler").val();
-        App.retailer = $("#retailer").val();
-        App.customer = $("#customer").val();
-
-        // console.log(
-        //     App.sku,
-        //     App.upc,
-        //     App.ownerID, 
-        //     App.miner, 
-        //     App.minerName, 
-        //     App.mineInformation, 
-        //     App.mineLatitude, 
-        //     App.mineLongitude, 
-        //     App.itemNotes, 
-        //     App.itemPrice, 
-        //     App.manufacturer, 
-        //     App.retailer, 
-        //     App.customer
-        // );
     },
 
     initWeb3: async () => {
@@ -101,25 +49,27 @@ App = {
         })
     },
 
-    initContracts: function () {
+    initContracts: async() => {
         /// Source the truffle compiled smart contracts
         var jsonAppContract ='../../build/contracts/FlightSuretyApp.json';
         var jsonDataContract ='../../build/contracts/FlightSuretyData.json';
-        
-        /// JSONfy the smart contracts
-        $.getJSON(jsonAppContract, function(data) {
-            //console.log('data', data);
-            var ContractArtifact = data;
-            App.contracts.AppContract = TruffleContract(ContractArtifact);
-            App.contracts.AppContract.setProvider(App.web3Provider);
-        });
 
-        $.getJSON(jsonDataContract, function(data) {
+        /// JSONfy the smart contracts
+        $.getJSON(jsonDataContract, (data) => {
             //console.log('data', data);
             var ContractArtifact = data;
             App.contracts.DataContract = TruffleContract(ContractArtifact);
             App.contracts.DataContract.setProvider(App.web3Provider);
         });
+        
+        $.getJSON(jsonAppContract, (data) => {
+            //console.log('data', data);
+            var ContractArtifact = data;
+            App.contracts.AppContract = TruffleContract(ContractArtifact);
+            App.contracts.AppContract.setProvider(App.web3Provider);
+            App.fetchEvents();
+        });
+
         return App.bindEvents();
     },
 
@@ -129,17 +79,54 @@ App = {
     },
 
     handleChange: async (event) => {
-        if (event.target.id == "file-input") {
-            const file = event.target.files[0];
-            $('#selectedIpfsFile').val(file.name);
-            console.log(file);
+        if (event.target.id == "flights") {
+            return await App.getFlightDetailsForInsurance();
+        } else if (event.target.id == "flightsOracles") {
+            return await App.getFlightDetailsForWithdraw();
+        }
+    },
+
+    getFlightDetailsForInsurance: async(event) => {
+        let flightNumber = $("select#flights option:selected").text();
+            try {
+                const instance = await App.contracts.AppContract.deployed(); 
+                let flightDetails = await instance.getFlightDetails(web3.fromUtf8(flightNumber));
+                if (flightDetails && flightDetails.length > 0){
+                    $("#flightCompany").val(flightDetails[0]);
+                    $("#flightTimestamp").val(new Date(flightDetails[2]*1000));
+                    $("#flightStatus").val(flightDetails[3]);
+                } else {
+                    console.log(`Unable to find the flight details for flight ${flightNumber}`);
+                }
+                console.log(`Successfully got the flight details for flight ${flightNumber} -> ${flightDetails}`);
+            } catch (exception){
+                console.log(`Unable to get the flight details for flight ${flightNumber} due to ${exception.message}`);
+            }
+    },
+
+    getFlightDetailsForWithdraw: async(event) => {
+        let flightNumber = $("select#flightsOracles option:selected").text();
+        try {
+            const instance = await App.contracts.AppContract.deployed(); 
+            let flightDetails = await instance.getFlightDetails(web3.fromUtf8(flightNumber));
+            let maxAmountToWithdraw = await instance.getBalanceOfInsuree();
+            if (flightDetails && flightDetails.length > 0){
+                $("#flightCompanyOracles").val(flightDetails[0]);
+                $("#flightTimestampOracles").val(new Date(flightDetails[2]*1000));
+                $("#flightStatusOracles").val(flightDetails[3]);
+                $("#insuranceAmountToWithdraw").val(web3.fromWei(maxAmountToWithdraw, 'finney'));
+            } else {
+                console.log(`Unable to find the flight details for flight ${flightNumber}`);
+            }
+            console.log(`Successfully got the flight details for flight ${flightNumber} -> ${flightDetails}`);
+        } catch (exception){
+            console.log(`Unable to get the flight details for flight ${flightNumber} due to ${exception.message}`);
         }
     },
 
     handleButtonClick: async (event) => {
         App.getMetaskAccountID();
         
-        App.readForm();
         var processId = parseInt($(event.target).data('id'));
         
         switch (processId) {
@@ -162,30 +149,13 @@ App = {
             case 8:
                 return await App.registerFlight(event);
             case 9:
-                return await App.returnCutItem(event);
+                return await App.getFlights(event);
             case 10:
-                return await App.receiveCutItem(event);
+                return await App.buyInsurance(event);
             case 11:
-                return await App.markForPurchasing(event);
+                return await App.fetchFlightStatus(event);
             case 12:
-                return await App.sendItemForPurchasing(event);
-            case 13:
-                return await App.receiveItemForPurchasing(event);
-            case 14:
-                return await App.putUpForPurchasing(event);
-            case 15:
-                return await App.purchaseItem(event);
-            case 16:
-                return await App.fetchItem(event);
-            case 17:
-                return await App.fetchItemBufferOne(event);
-            case 18:
-                return await App.fetchItemBufferTwo(event);
-            case 19:
-                $('#file-input').click();
-                break;
-            case 20:
-                return await App.readHash(event);
+                return await App.withdraw(event);
         }
     },
     getAppContractAddress: async(event) => {
@@ -328,234 +298,122 @@ App = {
         };
     },
 
-    receiveItemToCut: async (event) => {
-        try {
+    getFlights: async (event) => {
+       try {
             event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.receiveItemToCut(App.upc);
-            console.log('receiveItemToCut', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },
-    
-    cutItem: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.cutItem(App.upc);
-            console.log('cutItem', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },
-    
-    returnCutItem: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.returnCutItem(App.upc);
-            console.log('returnCutItem', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },
-    
-    receiveCutItem: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.receiveCutItem(App.upc);
-            console.log('receiveCutItem', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },
-    
-    markForPurchasing: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            let productPrice = web3.toWei(App.productPrice, "ether");
-            const result = await instance.markForPurchasing(App.upc, productPrice);
-            console.log('markForPurchasing', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },    
+            const instance = await App.contracts.AppContract.deployed();
+            let flights = await instance.getAllFlights();
+            if(flights && flights.length > 0){
+                var option = '';
+                let flightToUtf8;
+                flights.forEach(flight => {
+                    flightToUtf8 = web3.toUtf8(flight);
+                    option += '<option value="'+ flightToUtf8 + '">' + flightToUtf8 + '</option>';
+                });
+                $("#flights").empty();
+                $("#flights").append(option);
+                $("#flights").val(web3.toUtf8(flights[0])).change();
 
-    sendItemForPurchasing: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.sendItemForPurchasing(App.upc, App.retailer);
-            console.log('sendItemForPurchasing', result);
+                $("#flightsOracles").empty();
+                $("#flightsOracles").append(option);
+                $("#flightsOracles").val(web3.toUtf8(flights[0])).change();
+            }
+            console.log(`Successfully got a list of ${flights.length} flight(s)`);
         } catch(err) {
             console.log(err.message);
         };
     },
     
-    receiveItemForPurchasing: async (event) => {
+    buyInsurance: async (event) => {
         try {
             event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.receiveItemForPurchasing(App.upc);
-            console.log('receiveItemForPurchasing', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },
-    
-    putUpForPurchasing: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.putUpForPurchasing(App.upc);
-            console.log('putUpForPurchasing', result);
-        } catch(err) {
-            console.log(err.message);
-        };
-    },
-
-    purchaseItem: async (event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            let value = Number(prompt("Please enter value to send in ether"));
-            if (value > 0) {
-                const walletValue = web3.toWei(value, "ether");
-                const result = await instance.purchaseItem(App.upc, {value: walletValue});
-                console.log('purchaseItem', result);
+            const instance = await App.contracts.AppContract.deployed();
+            let flightNumber = $("select#flights option:selected").text();
+            let amount = $("#insuranceAmount").val();
+            if(flightNumber && amount){
+                const amountInWei = web3.toWei(amount, 'finney');
+                const flightNumberInHex = web3.fromAscii(flightNumber);
+                await instance.buyInsurance(flightNumberInHex, {value: amountInWei});
+                console.log(`Successsfully bought insurace worth ${amount} finney for flight number ${flightNumber}`);
+            } else {
+                alert('Please select a flight number and an insurance amount');
             }
         } catch(err) {
             console.log(err.message);
         };
     },
 
-    fetchItem: async (event) => {
+    fetchFlightStatus: async (event) => {
         try {
             event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.fetchItem(App.upc);
-            console.log('fetchItem', result);
+            const instance = await App.contracts.AppContract.deployed();
+            let flightNumber = $("select#flightsOracles option:selected").text();
+            if(flightNumber){
+                const flightNumberInHex = web3.fromAscii(flightNumber);
+                await instance.fetchFlightStatus(flightNumberInHex);
+                console.log(`Successsfully sent the Fetch Flight Status command for flight ${flightNumber}`);
+            } else {
+                alert('Please select a flight number in order to fetch its status');
+            }
         } catch(err) {
             console.log(err.message);
         };
     },
 
-    fetchItemBufferOne: async () => {
-        App.upc = $('#upc').val();
-        console.log('upc', App.upc);
+    withdraw: async (event) => {
         try {
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.fetchItemBufferOne.call(App.upc);
-            App.consoleLogfetchItemBufferOne(result);
-            App.updateFieldsBufferOne(result);
+            event.preventDefault();
+            let amountToWithdraw = $("#insuranceAmountToWithdraw").val();
+            if(amountToWithdraw && Number(amountToWithdraw) > 0){
+                const instance = await App.contracts.AppContract.deployed();
+                await instance.withdraw(web3.toWei(amountToWithdraw, 'finney'));
+                console.log(`Successsfully sent the withdraw command`);
+            } else {
+                alert('Please input an amount of finney to withdraw');
+            }
         } catch(err) {
-          console.log(err.message);
+            console.log(err.message);
         };
-    },
-
-    fetchItemBufferTwo: async () => {
-        try {                
-            const instance = await App.contracts.SupplyChain.deployed();
-            let result = await instance.fetchItemBufferTwo.call(App.upc);
-            App.consoleLogfetchItemBufferTwo(result);
-            App.updateFieldsBufferTwo(result);
-        } catch(err) {
-          console.log(err.message);
-        };
-    },
-
-    fetchEvents: function () {
-        if (typeof App.contracts.SupplyChain.currentProvider.sendAsync !== "function") {
-            App.contracts.SupplyChain.currentProvider.sendAsync = function () {
-                return App.contracts.SupplyChain.currentProvider.send.apply(
-                App.contracts.SupplyChain.currentProvider,
-                    arguments
-              );
-            };
-        }
-
-        App.contracts.SupplyChain.deployed().then(function(instance) {
-        var events = instance.allEvents(function(err, log){
-          if (!err)
-            $("#ftc-events").append('<li>' + log.event + ' - ' + log.transactionHash + '</li>');
-        });
-        }).catch(function(err) {
-          console.log(err.message);
-        });
     },
     
-    uploadHash: async(hash) => {
+    fetchEvents: async () => {
+        if (typeof App.contracts.AppContract.currentProvider.sendAsync !== "function") {
+            App.contracts.AppContract.currentProvider.sendAsync = function () {
+                return App.contracts.AppContract.currentProvider.send.apply(App.contracts.AppContract.currentProvider, arguments);
+            };
+        }
         try {
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.uploadHash(App.upc, hash);
-            console.log('uploadHash', result);
-        } catch(err) {
-            console.log
+            const instance = await App.contracts.AppContract.deployed();
+            instance.allEvents((err, log) => {
+                if (!err) {
+                    App.handleEvent(log);
+                }
+            });
+        } catch (err) {
             console.log(err.message);
         };
     },
 
-    readHash: async(event) => {
-        try {
-            event.preventDefault();
-            const instance = await App.contracts.SupplyChain.deployed();
-            const result = await instance.readHash.call(App.upc);
-            $('#selectedIpfsFile').val(result);
-            console.log('readHash', result);
-        } catch(err) {
-            console.log(err.message);
+    handleEvent: (log) =>{
+        let eventLog = '';
+        switch(log.event) {
+            case "AirlineRegistered": 
+                eventLog = `${log.event} : Airline ${log.args.airline} votes: ${log.args.votes}`;
+                break;
+            case "AirlineFunded":
+                eventLog = `${log.event} : Airline ${log.args.airline} amount: ${web3.fromWei(log.args.value, 'ether')} ETH`;
+                break;
+            case "InsurancePurchased":
+                eventLog = `${log.event} : Passenger ${log.args.passenger} flight number: ${web3.toUtf8(log.args.flightNumber)} amount: ${web3.fromWei(log.args.value, 'finney')} FINNEY`;
+                break;
+            case "FlightStatusInfo", "OracleReport":
+                eventLog = `${log.event} : Airline ${log.args.airline} flight number: ${web3.toUtf8(log.args.flightNumber)} timeStamp: ${log.args.timestamp} status ${log.args.status}`;  
+                break;
+            case "OracleRequest":
+                eventLog = `${log.event} : Index ${log.args.index} Airline: ${log.args.airline} flight number: ${web3.toUtf8(log.args.flightNumber)} timeStamp: ${log.args.timestamp}`;  
+                break;
         }
-    },
-
-    consoleLogfetchItemBufferOne: (result) => {
-        console.log('sku:' + Number(result[0]));
-        console.log('upc:' + Number(result[1]));
-        console.log('owner:' + result[2]);
-        console.log('miner:' + result[3]);
-        console.log('minerName:' + result[4]);
-        console.log('mineInformation:' + result[5]);
-        console.log('mineLatitude:' + result[6]);
-        console.log('mineLongitude:' + result[7]);
-    },
-
-    consoleLogfetchItemBufferTwo: (result) => {
-        console.log('sku:' + Number(result[0]));
-        console.log('upc:' + Number(result[1]));
-        console.log('productID:' + Number(result[2]));
-        console.log('itemNotes:' + result[3]);
-        console.log('itemPrice:' + web3.fromWei(result[4], "ether"));
-        console.log('productPrice:' + web3.fromWei(result[5], "ether"));
-        console.log('itemState:' + Number(result[6]));
-        console.log('manufacturer:' + result[7]);
-        console.log('masterjeweler:' + result[8]);
-        console.log('retailer:' + result[9]);
-        console.log('customer:' + result[10]);
-    },
-
-    updateFieldsBufferOne: (result) => {
-        $("#sku").val(Number(result[0]));
-        $("#upc").val(Number(result[1]));
-        $("#ownerID").val(result[2]);
-        $("#miner").val(result[3]);
-        $("#minerName").val(result[4]);
-        $("#mineInformation").val(result[5]);
-        $("#mineLatitude").val(result[6]);
-        $("#mineLongitude").val(result[7]);
-    },
-
-    updateFieldsBufferTwo: (result) => {
-        $("#sku").val(Number(result[0]));
-        $("#upc").val(Number(result[1]));
-        $("#itemNotes").val(result[3]);
-        $("#itemPrice").val(web3.fromWei(result[4], "ether"));
-        $("#productPrice").val(web3.fromWei(result[5], "ether"));
-        $("#manufacturer").val(result[7]);
-        $("#masterjeweler").val(result[8]);
-        $("#retailer").val(result[9]);
-        $("#customer").val(result[10]);
+        $("#ftc-events").append('<li>' + eventLog + '</li>');
     }
 };
 
