@@ -200,7 +200,7 @@ Web3.js v1.0.0-beta.37
 ### Testing libraries
 * [Chai](https://www.npmjs.com/package/chai)- BDD / TDD assertion library for node. It provides easy to read asserts and expects as well at matchers (greater, between, before, contains etc)
 * [truffle-assertions](https://www.npmjs.com/package/truffle-assertions) - Additional assertions and utilities for testing Ethereum smart contracts in Truffle unit tests. Used to listen for events
-* [lite-server](https://www.npmjs.com/search?q=lite-server) - Lightweight development node server for serving a web app. Used to kickstart the http server to deploy the html and js to interract with the dapp.
+
 
 ### Development Libraries and Tools
 * [Ethereum](https://www.ethereum.org/) - Ethereum is a decentralized platform that runs smart contracts. The SupplyChain contract is deployed on Rinkeby Test Network
@@ -209,6 +209,8 @@ Web3.js v1.0.0-beta.37
 * [web3js](https://www.npmjs.com/package/web3) Ethereum JavaScript API.
 * [truffle-hdwallet-provider](https://www.npmjs.com/package/truffle-hdwallet-provider) - HD Wallet-enabled Web3 provider. Use it to sign transactions for addresses. Used in truffle.cmd for deployment of contracts
 * [Visual Studio Code](https://code.visualstudio.com/) - Web editor
+* [lite-server](https://www.npmjs.com/search?q=lite-server) - Lightweight development node server for serving a web app. Used to kickstart the http server to deploy the html and js to interract with the dapp.
+* [express](https://www.npmjs.com/package/express)Fast, unopinionated, minimalist web framework for node. Used to host a server that will act as Oracles dispatcher for requests
 
 
 ## Authors
