@@ -12,17 +12,17 @@ let flightSuretyApp = new web3.eth.Contract(FlightSuretyApp.abi, config.appAddre
 let flightSuretyData = new web3.eth.Contract(FlightSuretyData.abi, config.dataAddress);
 const oracles = new Map();
 let accounts = [];
+const statuses = [20, 0, 10, 30, 40, 50];
 
 const registerInitialOracles = async () => {
     try {
         accounts = await getAccounts();
-        console.log(accounts);
-        for (let i = 5; i < 25; i++) {
+        for (let i = 10; i < 40; i++) {
             await registerOracle(accounts[i]);
             //console.log(`Registered ${accounts[i]} & tx=${tx}`);
             let indexes = await getOracleIndexes(accounts[i]);
             oracles.set(accounts[i], indexes);
-            console.log(`Oracle number ${i - 5} - ${accounts[i]} has indexes =  ${indexes}`);
+            console.log(`Oracle number ${i - 10} - ${accounts[i]} has indexes =  ${indexes}`);
         }
         // await authorizeAppContract();
         // await fundAirline();
@@ -116,8 +116,10 @@ const submitOracleResponse = (oracleAddress, index, airline, flightNumber, times
 const gerRandomFlightStatusCode = () =>{
     let index = Math.floor(Math.random() * Math.floor(10));
     if (index <= 7)
-        return 20;
-    return index+1;    
+        return statuses[0];
+    else {
+        return statuses[Math.floor(Math.random() * Math.floor(5)) + 1];
+    }    
 };
 
 const authorizeAppContract = () =>{

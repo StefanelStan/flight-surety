@@ -491,7 +491,7 @@ contract('FlightSuretyApp', accounts => {
     });
 
     //21:22 28.04.2019 continue with submitOracleResponse:manage the responses and IF they are good processFlightStatus (and credit the insurees)
-    describe('Test suite: submitOracleResponse', () => {
+    describe('Test suite: submitOracleResponse and getBalanceOfInsuree', () => {
         let chosenIndex;
         let minFee;
         let timestamp = 1122334455;
@@ -512,7 +512,7 @@ contract('FlightSuretyApp', accounts => {
 
             minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
 
-            for (let i=1; i <= 19; i++) {
+            for (let i=1; i <= 26; i++) {
                 await contractInstance.registerOracle({from: accounts[i], value: minFee});
                 let indexes = await contractInstance.getMyIndexes.call({from: accounts[i]});
                 oracles.set(accounts[i], [Number(indexes[0]), Number(indexes[1]), Number(indexes[2])]); 
@@ -549,12 +549,12 @@ contract('FlightSuretyApp', accounts => {
             if(matchingIndexOracles.length <3){
                 assert.fail(`Test failed as less than 3 oracles have the correct index of ${chosenIndex}`);
             }
-            //buy 4 insurances from accounts[20-23] and watch if their contract balances get credited and airline balance gets deducted
-            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[20], value: oneEther});
-            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[21], value: oneEther});
-            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[22], value: oneEther});
-            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[23], value: oneEther});
-            const customerOneBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            //buy 4 insurances from accounts[27-24] and watch if their contract balances get credited and airline balance gets deducted
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[27], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[28], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[29], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[30], value: oneEther});
+            const customerOneBalanceBefore = await contractInstance.getBalanceOfInsuree({from: accounts[27]});
             const airlineBalanceBefore = await dataContract.getBalanceOfAirline(owner, {from: owner});
             expect(Number(customerOneBalanceBefore)).to.equal(Number(0));
             expect(Number(airlineBalanceBefore)).to.equal(Number(web3.utils.toWei('14', 'ether'))); // 10 FEE + 4 x INSURANCE FEE
@@ -569,10 +569,10 @@ contract('FlightSuretyApp', accounts => {
             });
 
             //verify processFlightStatus changes: creditInsurees and flightStatus 
-            const customerOneBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
-            const customerTwoBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[21], {from: owner});
-            const customerThreeBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[22], {from: owner});
-            const customerfourBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[23], {from: owner});
+            const customerOneBalanceAfter = await contractInstance.getBalanceOfInsuree({from: accounts[27]});
+            const customerTwoBalanceAfter = await contractInstance.getBalanceOfInsuree({from: accounts[28]});
+            const customerThreeBalanceAfter = await contractInstance.getBalanceOfInsuree({from: accounts[29]});
+            const customerfourBalanceAfter = await contractInstance.getBalanceOfInsuree({from: accounts[30]});
             const airlineBalanceAfter = await dataContract.getBalanceOfAirline(owner, {from: owner});
             expect(Number(customerOneBalanceAfter)).to.equal(Number(oneAndAHalfEther)); // 1 x 1.5
             expect(Number(customerTwoBalanceAfter)).to.equal(Number(oneAndAHalfEther));
@@ -580,7 +580,7 @@ contract('FlightSuretyApp', accounts => {
             expect(Number(customerfourBalanceAfter)).to.equal(Number(oneAndAHalfEther));
             expect(Number(airlineBalanceAfter)).to.equal(Number(eightEther)); // 14 - (4 x 1.5)
         });
-        
+  
         it('should NOT allow to submitOracleResponse if the flight is already resolved/processed', async() => {
             if(matchingIndexOracles.length < 4){
                 assert.fail(`Test failed as less than 4 oracles have the correct index of ${chosenIndex}`);
@@ -596,9 +596,9 @@ contract('FlightSuretyApp', accounts => {
         it('should NOT creditInsurees IF processFlightStatus is triggered by other response than 20', async() =>{
             //register a 2nd flight and buy 2 insurances
             await contractInstance.registerFlight(flightNumberTwo, timestamp, {from: owner});
-            await contractInstance.buyInsurance(flightNumberTwo, {from: accounts[20], value: oneEther});
-            await contractInstance.buyInsurance(flightNumberTwo, {from: accounts[21], value: oneEther});
-            const customerOneBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            await contractInstance.buyInsurance(flightNumberTwo, {from: accounts[27], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberTwo, {from: accounts[28], value: oneEther});
+            const customerOneBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[27], {from: owner});
             const airlineBalanceBefore = await dataContract.getBalanceOfAirline(owner, {from: owner});
             expect(Number(customerOneBalanceBefore)).to.equal(Number(oneAndAHalfEther));
             expect(Number(airlineBalanceBefore)).to.equal(Number(tenEther)); // 8 (from prev) + 2 new bought insurances
@@ -610,8 +610,8 @@ contract('FlightSuretyApp', accounts => {
                 return true;
             });
             getMatchingOracles(chosenIndex);
-            if(matchingIndexOracles.length < 3){
-                assert.fail(`Test failed as less than 3 oracles have the correct index of ${chosenIndex}`);
+            if(matchingIndexOracles.length < 4){
+                assert.fail(`Test failed as less than 4 oracles have the correct index of ${chosenIndex}`);
             }
             await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberTwo, timestamp, 10, {from: matchingIndexOracles[0]});
             await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberTwo, timestamp, 10, {from: matchingIndexOracles[1]});
@@ -624,8 +624,8 @@ contract('FlightSuretyApp', accounts => {
                        && expect(Number(ev.timestamp)).to.deep.equal(timestamp)
                        && expect(Number(ev.status)).to.deep.equal(10);
             });
-            const customerOneBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
-            const customerTwoBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[21], {from: owner});
+            const customerOneBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[27], {from: owner});
+            const customerTwoBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[28], {from: owner});
             const airlineBalanceAfter = await dataContract.getBalanceOfAirline(owner, {from: owner});
             expect(Number(customerOneBalanceAfter)).to.equal(Number(oneAndAHalfEther)); // 1 x 1.5
             expect(Number(customerTwoBalanceAfter)).to.equal(Number(oneAndAHalfEther));
@@ -646,7 +646,7 @@ contract('FlightSuretyApp', accounts => {
             await expectToRevert(contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 10, {from: matchingIndexOracles[1]}), 
                                 'Contract is currently not operational');
         });
-
+  
         const getMatchingOracles = (desiredIndex) => {
             matchingIndexOracles = [];
             for (let [address, indexes] of oracles) {
@@ -682,30 +682,30 @@ contract('FlightSuretyApp', accounts => {
 
             minFee = Number(await contractInstance.REGISTRATION_FEE.call({from: accounts[1]}));
 
-            for (let i=1; i <= 19; i++) {
+            for (let i=1; i <= 20; i++) {
                 await contractInstance.registerOracle({from: accounts[i], value: minFee});
                 let indexes = await contractInstance.getMyIndexes.call({from: accounts[i]});
                 oracles.set(accounts[i], [Number(indexes[0]), Number(indexes[1]), Number(indexes[2])]); 
             }
             getMatchingOracles(chosenIndex);
-            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[20], value: oneEther});
+            await contractInstance.buyInsurance(flightNumberOne, {from: accounts[27], value: oneEther});
             await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[0]});
             await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[1]});
             await contractInstance.submitOracleResponse(chosenIndex, owner, flightNumberOne, timestamp, 20, {from: matchingIndexOracles[2]});
         });
 
         it('should NOT allow to withdraw if desired amount it higher than customer\'s actual balance', async() => {
-            await expectToRevert(contractInstance.withdraw(twoEther, {from: accounts[20]}), 'The desired amount exceedes insuree balance');
+            await expectToRevert(contractInstance.withdraw(twoEther, {from: accounts[27]}), 'The desired amount exceedes insuree balance');
         });
 
         it('should allow a customer to withdraw the desired amount, deduct from the data contract account balance and transfer to client account', async() => {
-            let customerWalletBalanceBefore = await web3.eth.getBalance(accounts[20]);
-            let customerContractBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            let customerWalletBalanceBefore = await web3.eth.getBalance(accounts[27]);
+            let customerContractBalanceBefore = await dataContract.getBalanceOfInsuree(accounts[27], {from: owner});
             let dataContractBalanceBefore = await web3.eth.getBalance(dataContract.address);
-            await contractInstance.withdraw(oneEther, {from: accounts[20]});
+            await contractInstance.withdraw(oneEther, {from: accounts[27]});
 
-            let customerWalletBalanceAfter = await web3.eth.getBalance(accounts[20]);
-            let customerContractBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[20], {from: owner});
+            let customerWalletBalanceAfter = await web3.eth.getBalance(accounts[27]);
+            let customerContractBalanceAfter = await dataContract.getBalanceOfInsuree(accounts[27], {from: owner});
             let dataContractBalanceAfter = await web3.eth.getBalance(dataContract.address);
 
             expect(Number(customerContractBalanceBefore)).to.equal(Number(oneAndAHalfEther));
@@ -718,7 +718,7 @@ contract('FlightSuretyApp', accounts => {
 
         it('should NOT allow to withdraw if contract is paused', async() => {
             await contractInstance.setOperatingStatus(false, {from: owner});
-            await expectToRevert(contractInstance.withdraw(oneEther, {from: accounts[20]}), 'Contract is currently not operational');
+            await expectToRevert(contractInstance.withdraw(oneEther, {from: accounts[27]}), 'Contract is currently not operational');
         });
 
         const getMatchingOracles = (desiredIndex) => {
@@ -733,6 +733,7 @@ contract('FlightSuretyApp', accounts => {
             }
         }
     });
+    
 });   
 
 const expectToRevert = (promise, errorMessage) => {

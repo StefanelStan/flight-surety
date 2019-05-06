@@ -118,7 +118,7 @@ App = {
             } else {
                 console.log(`Unable to find the flight details for flight ${flightNumber}`);
             }
-            console.log(`Successfully got the flight details for flight ${flightNumber} -> ${flightDetails}`);
+            console.log(`Successfully got the flight details for withdraw for flight ${flightNumber} -> ${flightDetails}`);
         } catch (exception){
             console.log(`Unable to get the flight details for flight ${flightNumber} due to ${exception.message}`);
         }
@@ -128,7 +128,10 @@ App = {
         App.getMetaskAccountID();
         
         var processId = parseInt($(event.target).data('id'));
-        
+        if((event.target.id == "flights" && $('#flights > option').length == 1) 
+            ||(event.target.id == "flightsOracles" && $('#flightsOracles > option').length == 1)){
+                return $("#" + event.target.id + "").change();
+            }
         switch (processId) {
             case 0:
                 return await App.getAppContractAddress(event);
@@ -404,15 +407,19 @@ App = {
                 eventLog = `${log.event} : Airline ${log.args.airline} amount: ${web3.fromWei(log.args.value, 'ether')} ETH`;
                 break;
             case "InsurancePurchased":
-                eventLog = `${log.event} : Passenger ${log.args.passenger} flight number: ${web3.toUtf8(log.args.flightNumber)} amount: ${web3.fromWei(log.args.value, 'finney')} FINNEY`;
+                eventLog = `${log.event} : Passenger ${log.args.passenger} flight number: ${web3.toUtf8(log.args.flightNumber)} amount: ${web3.fromWei(log.args.amount, 'finney')} FINNEY`;
                 break;
-            case "FlightStatusInfo", "OracleReport":
+            case "FlightStatusInfo":
                 eventLog = `${log.event} : Airline ${log.args.airline} flight number: ${web3.toUtf8(log.args.flightNumber)} timeStamp: ${log.args.timestamp} status ${log.args.status}`;  
                 break;
+            case "OracleReport":
+                eventLog = `${log.event} : Airline ${log.args.airline} flight number: ${web3.toUtf8(log.args.flightNumber)} timeStamp: ${log.args.timestamp} status ${log.args.status}`;  
+                break;    
             case "OracleRequest":
                 eventLog = `${log.event} : Index ${log.args.index} Airline: ${log.args.airline} flight number: ${web3.toUtf8(log.args.flightNumber)} timeStamp: ${log.args.timestamp}`;  
                 break;
         }
+        console.log(eventLog);
         $("#ftc-events").append('<li>' + eventLog + '</li>');
     }
 };
